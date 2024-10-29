@@ -497,7 +497,6 @@ namespace MyGame
                     sonidos[0].Stop();
                     currentState = GameState.Playing;
                     player = new Character(ScreenWidth / 2 - 16, 0);
-                    player.isAnimating = true;
                     //sonidos[1].PlayLooping();
                 }
             }
