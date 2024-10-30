@@ -14,6 +14,8 @@ namespace MyGame
             public int gravity = 1;
             public int screenWidth = 1024;
             public int screenHeight = 768;
+            public int screenMoveLimit = 350;
+            public int score = 0;
             public bool soundEnabled = false;
             public string menuMessage = "Foxy Runner";
             public string subMessage = "Presiona 'R' para comenzar";
@@ -57,11 +59,11 @@ namespace MyGame
             font[0] = Engine.LoadFont("assets/font.ttf", 80);
             font[1] = Engine.LoadFont("assets/font.ttf", 30);
             sonidos[0] = new SoundPlayer("assets/sounds/menu.wav");
-            sonidos[1] = new SoundPlayer("assets/sounds/level2.wav");
-            fondo[0] = Engine.LoadImage("assets/fondo.png");
-            fondo[1] = Engine.LoadImage("assets/fondo4.png");
-            fondo[2] = Engine.LoadImage("assets/fondo2.png");
-            fondo[3] = Engine.LoadImage("assets/fondo3.png");
+            sonidos[1] = new SoundPlayer("assets/sounds/level.wav");
+            fondo[0] = Engine.LoadImage("assets/fondo1.png");
+            fondo[1] = Engine.LoadImage("assets/fondo2.png");
+            fondo[2] = Engine.LoadImage("assets/fondo3.png");
+            fondo[3] = Engine.LoadImage("assets/fondo4.png");
             fondo[4] = Engine.LoadImage("assets/parallax1.png");
             fondo[5] = Engine.LoadImage("assets/parallax1.png");
             fondo[6] = Engine.LoadImage("assets/parallax2.png");
@@ -259,6 +261,7 @@ namespace MyGame
                     Engine.Draw(fondo[8], posXParallax["3A"], 0);
                     Engine.Draw(fondo[9], posXParallax["3B"], 0);
                     Engine.Draw(player.image, player.posX, player.posY);
+                    Engine.DrawText($"Puntaje: {gc.score}",20, 15, 232, 120, 55, font[1]);
                     break;
                 case GameState.Paused:
                     Engine.Draw(fondo[1], 0, 0);
@@ -270,6 +273,8 @@ namespace MyGame
                     Engine.Draw(fondo[9], posXParallax["3B"], 0);
                     Engine.Draw(player.image, player.posX, player.posY);
                     Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 120, gc.screenHeight / 2 - 150, 243, 198, 35, font[0]);
+                    Engine.DrawText($"Puntaje: {gc.score}", 20, 15, 232, 120, 55, font[1]);
+
                     break;
                 case GameState.Menu:
                     Engine.Draw(fondo[0], 0, posYFondo[0]);
@@ -391,7 +396,7 @@ namespace MyGame
             {
                 player.dir = direction;
                 string dir = (player.dir > 0) ? dir = "R" : dir = "L";
-                if (player.posX >= 250 && direction < 0 || player.posX <= gc.screenWidth - 250 && direction > 0)
+                if (player.posX >= gc.screenMoveLimit && direction < 0 || player.posX <= gc.screenWidth - gc.screenMoveLimit && direction > 0)
                 {
                     player.posX += player.speed * direction;
                 }
