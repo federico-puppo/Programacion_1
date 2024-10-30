@@ -5,11 +5,29 @@ using Tao.Sdl;
 
 namespace MyGame
 {
+
     class Program
     {
-        static Image[] fondo = new Image[10];
-        static SoundPlayer[] sonidos = new SoundPlayer[2];
-        static Font[] font = new Font[2];
+        class GameConfig
+        {
+            public int groundLevel = 718;
+            public int gravity = 1;
+            public int screenWidth = 1024;
+            public int screenHeight = 768;
+            public bool soundEnabled = false;
+            public string menuMessage = "Foxy Runner";
+            public string subMessage = "Presiona 'R' para comenzar";
+            public int frame = 0;
+            public float frameTimer = 0f;
+            public float frameDuration = 0.06f;
+            public float pauseCooldown = 0.3f;
+            public float lastPauseTime = 0;
+        }
+
+        static readonly GameConfig gc = new GameConfig();
+        static readonly Image[] fondo = new Image[10];
+        static readonly SoundPlayer[] sonidos = new SoundPlayer[2];
+        static readonly Font[] font = new Font[2];
         static Character player;
         enum GameState
         {
@@ -19,28 +37,21 @@ namespace MyGame
             Paused
         }
         static GameState currentState = GameState.Menu;
-        static int groundLevel = 718;
-        static int gravity = 1;
-        static string menuMessage = "Foxy Runner";
-        static string subMessage = "Presiona 'R' para comenzar";
-        static int ScreenWidth = 1024;
-        static int ScreenHeight = 768;
+ 
+        static int[] posYFondo = new int[3]
+        {
+            0,gc.screenHeight,gc.screenHeight * 2
+        };
 
-        static int posYFondo1 = 0;
-        static int posYFondo2 = ScreenHeight;
-        static int posYFondo3 = ScreenHeight * 2;
-        static int posXParallax1A = 0;
-        static int posXParallax1B = ScreenWidth;
-        static int posXParallax2A = 0;
-        static int posXParallax2B = ScreenWidth;
-        static int posXParallax3A = 0;
-        static int posXParallax3B = ScreenWidth;
-        static int frame = 0;
-        static float frameTimer = 0f;
-        static float frameDuration = 0.06f;
-        static float pauseCooldown = 0.3f;
-        static float lastPauseTime = 0;
-
+        static Dictionary<string, int> posXParallax = new Dictionary<string, int>()
+        {
+            {"1A", 0},
+            {"1B", gc.screenWidth},
+            {"2A", 0},
+            {"2B", gc.screenWidth},
+            {"3A", 0},
+            {"3B", gc.screenWidth}
+        };
         static void LoadAssets()
         {
             font[0] = Engine.LoadFont("assets/font.ttf", 80);
@@ -61,7 +72,7 @@ namespace MyGame
 
         static void Main(string[] args)
         {
-            Engine.Initialize(ScreenWidth, ScreenHeight);
+            Engine.Initialize(gc.screenWidth, gc.screenHeight);
             LoadAssets();
             float previousTime = Sdl.SDL_GetTicks() / 1000f;
             IniciarJuego();
@@ -86,9 +97,8 @@ namespace MyGame
             public int posY;
             public int speed = 4;
             public bool isJumping = false;
-            public bool isAnimating = false;
             public int jumpVelocity = 0;
-            public string animation = "idle";
+            public string animation = "idle_R";
             public int jumpStrength = 12;
             public int characterWidth = 32;
             public int characterHeight = 33;
@@ -102,7 +112,7 @@ namespace MyGame
                 posX = startX;
                 posY = startY;
                 LoadCharacterAssets();
-                image = animaciones["idle_R"][0];
+                image = animaciones[animation][0];
             }
 
             private void LoadCharacterAssets()
@@ -218,10 +228,10 @@ namespace MyGame
         static void CheckInputs()
         {
             float currentTime = Sdl.SDL_GetTicks() / 1000f;
-            if (Engine.KeyPress(Engine.KEY_P) && currentState != GameState.Menu && currentState != GameState.Presentation && (currentTime - lastPauseTime > pauseCooldown))
+            if (Engine.KeyPress(Engine.KEY_P) && currentState != GameState.Menu && currentState != GameState.Presentation && (currentTime - gc.lastPauseTime > gc.pauseCooldown))
             {
-                lastPauseTime = currentTime;
-                menuMessage = "PAUSA";
+                gc.lastPauseTime = currentTime;
+                gc.menuMessage = "PAUSA";
                 currentState = (currentState == GameState.Paused) ? GameState.Playing : GameState.Paused;
             }
             if (Engine.KeyPress(Engine.KEY_RIGHT) || Engine.KeyPress(Engine.KEY_D)) Move(1);
@@ -232,7 +242,7 @@ namespace MyGame
             if (Engine.KeyPress(Engine.KEY_R) && currentState == GameState.Menu)
             {
                 currentState = GameState.Presentation;
-                subMessage = "buena suerte...";
+                gc.subMessage = "buena suerte...";
             }
         }
         static void Render()
@@ -242,36 +252,36 @@ namespace MyGame
             {
                 case GameState.Playing:
                     Engine.Draw(fondo[1], 0, 0);
-                    Engine.Draw(fondo[4], posXParallax1A, 0);
-                    Engine.Draw(fondo[5], posXParallax1B, 0);
-                    Engine.Draw(fondo[6], posXParallax2A, 0);
-                    Engine.Draw(fondo[7], posXParallax2B, 0);
-                    Engine.Draw(fondo[8], posXParallax3A, 0);
-                    Engine.Draw(fondo[9], posXParallax3B, 0);
+                    Engine.Draw(fondo[4], posXParallax["1A"], 0);
+                    Engine.Draw(fondo[5], posXParallax["1B"], 0);
+                    Engine.Draw(fondo[6], posXParallax["2A"], 0);
+                    Engine.Draw(fondo[7], posXParallax["2B"], 0);
+                    Engine.Draw(fondo[8], posXParallax["3A"], 0);
+                    Engine.Draw(fondo[9], posXParallax["3B"], 0);
                     Engine.Draw(player.image, player.posX, player.posY);
                     break;
                 case GameState.Paused:
                     Engine.Draw(fondo[1], 0, 0);
-                    Engine.Draw(fondo[4], posXParallax1A, 0);
-                    Engine.Draw(fondo[5], posXParallax1B, 0);
-                    Engine.Draw(fondo[6], posXParallax2A, 0);
-                    Engine.Draw(fondo[7], posXParallax2B, 0);
-                    Engine.Draw(fondo[8], posXParallax3A, 0);
-                    Engine.Draw(fondo[9], posXParallax3B, 0);
+                    Engine.Draw(fondo[4], posXParallax["1A"], 0);
+                    Engine.Draw(fondo[5], posXParallax["1B"], 0);
+                    Engine.Draw(fondo[6], posXParallax["2A"], 0);
+                    Engine.Draw(fondo[7], posXParallax["2B"], 0);
+                    Engine.Draw(fondo[8], posXParallax["3A"], 0);
+                    Engine.Draw(fondo[9], posXParallax["3B"], 0);
                     Engine.Draw(player.image, player.posX, player.posY);
-                    Engine.DrawText($"{menuMessage}", ScreenWidth / 2 - 120, ScreenHeight / 2 - 150, 243, 198, 35, font[0]);
+                    Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 120, gc.screenHeight / 2 - 150, 243, 198, 35, font[0]);
                     break;
                 case GameState.Menu:
-                    Engine.Draw(fondo[0], 0, posYFondo1);
-                    Engine.DrawText($"{menuMessage}", ScreenWidth / 2 - 250, posYFondo1 + 250, 243, 198, 35, font[0]);
-                    Engine.DrawText($"{subMessage}", ScreenWidth / 2 - 210, posYFondo1 + 450, 243, 198, 35, font[1]);
+                    Engine.Draw(fondo[0], 0, posYFondo[0]);
+                    Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 250, posYFondo[0] + 250, 243, 198, 35, font[0]);
+                    Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 210, posYFondo[0] + 450, 243, 198, 35, font[1]);
                     break;
                 case GameState.Presentation:
-                    Engine.Draw(fondo[0], 0, posYFondo1);
-                    Engine.Draw(fondo[2], 0, posYFondo2);
-                    Engine.Draw(fondo[3], 0, posYFondo3);
-                    Engine.DrawText($"{menuMessage}", ScreenWidth / 2 - 250, posYFondo1 + 250, 243, 198, 35, font[0]);
-                    Engine.DrawText($"{subMessage}", ScreenWidth / 2 - 120, posYFondo1 + 450, 243, 198, 35, font[1]);
+                    Engine.Draw(fondo[0], 0, posYFondo[0]);
+                    Engine.Draw(fondo[2], 0, posYFondo[1]);
+                    Engine.Draw(fondo[3], 0, posYFondo[2]);
+                    Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 250, posYFondo[0] + 250, 243, 198, 35, font[0]);
+                    Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 120, posYFondo[0] + 450, 243, 198, 35, font[1]);
                     break;
                 }
                 Engine.Show();
@@ -279,158 +289,100 @@ namespace MyGame
 
         static void Update(float deltaTime)
         {
-
-            CheckAnimations(deltaTime);
-            CheckParallax();
-            AplicateGravity();
-            if (currentState == GameState.Presentation)
+            switch (currentState)
             {
-                AnimarPresentacion(deltaTime);
+                case GameState.Playing:
+                    CheckAnimations(deltaTime);
+                    AplicateGravity();
+                    break;
+                case GameState.Presentation:
+                    AnimarPresentacion(deltaTime);
+                    break;
+                default:
+                    break;
             }
         }
 
         static void IniciarJuego()
         {
             currentState = GameState.Menu;
-            //sonidos[0].PlayLooping();
-        }
-
-        static void Animate(int frame)
-        {
-            if (frame < player.animaciones[player.animation].Length)
+            if (gc.soundEnabled)
             {
-                player.image = player.animaciones[player.animation][frame];
+            sonidos[0].PlayLooping();
             }
         }
 
         static void AplicateGravity()
         {
-            if (currentState == GameState.Playing)
-            {
                 player.posY += player.jumpVelocity;
-                player.jumpVelocity += gravity;
+                player.jumpVelocity += gc.gravity;
                 if (player.jumpVelocity > 0)
                 {
                     string dir = (player.dir > 0) ? dir = "R" : dir = "L";
                     SetAnimation($"roll_{dir}");
                 }
-                if (player.posY >= groundLevel - player.characterHeight)
+                if (player.posY >= gc.groundLevel - player.characterHeight)
                 {
-                    player.posY = groundLevel - player.characterHeight;
+                    player.posY = gc.groundLevel - player.characterHeight;
                     player.isJumping = false;
                     string dir = (player.dir > 0) ? dir = "R" : dir = "L";
                     SetAnimation($"idle_{dir}");
                 }
-            }
            
         }
         static void MoveParallax()
         {
-                posXParallax1A -= player.speed / 4 * player.dir;
-                posXParallax1B -= player.speed / 4 * player.dir;
-                posXParallax2A -= player.speed / 2 * player.dir;
-                posXParallax2B -= player.speed / 2 * player.dir;
-                posXParallax3A -= player.speed * player.dir;
-                posXParallax3B -= player.speed * player.dir;
-        }
-        static void CheckParallax()
-        {
-            if (currentState != GameState.Paused)
-            {
-                //PRIMERA CAPA PARALLAX
-                //FONDO 1A Sale por la izquierda -> fondo 1A entra por la derecha
-                if (posXParallax1A <= -ScreenWidth)
-                {
-                    posXParallax1A = posXParallax1B + ScreenWidth;
-                }
-                //FONDO 1A Sale por la derecha -> fondo 1B entra por la izquierda
-                if (posXParallax1A > 0)
-                {
-                    posXParallax1B = posXParallax1A - ScreenWidth;
-                }
-                //FONDO 1B Sale por la izquierda -> fondo 1B entra por la derecha
-                if (posXParallax1B <= -ScreenWidth)
-                {
-                    posXParallax1B = posXParallax1A + ScreenWidth;
-                }
-                //FONDO 1B Sale por la derecha -> fondo 1A entra por la izquierda
-                if (posXParallax1B > 0)
-                {
-                    posXParallax1A = posXParallax1B - ScreenWidth;
-                }
-                //SEGUNDA CAPA PARALLAX
-                //FONDO 2A Sale por la izquierda -> fondo 2A entra por la derecha
-                if (posXParallax2A <= -ScreenWidth)
-                {
-                    posXParallax2A = posXParallax2B + ScreenWidth;
-                }
-                //FONDO 2A Sale por la derecha -> fondo 2B entra por la izquierda
-                if (posXParallax2A > 0)
-                {
-                    posXParallax2B = posXParallax2A - ScreenWidth;
-                }
-                //FONDO 2B Sale por la izquierda -> fondo 2B entra por la derecha
-                if (posXParallax2B <= -ScreenWidth)
-                {
-                    posXParallax2B = posXParallax2A + ScreenWidth;
-                }
-                //FONDO 2B Sale por la derecha -> fondo 2A entra por la izquierda
-                if (posXParallax2B > 0)
-                {
-                    posXParallax2A = posXParallax2B - ScreenWidth;
-                }
-                //TERCER CAPA PARALLAX
-                //FONDO 3A Sale por la izquierda -> fondo 3A entra por la derecha
-                if (posXParallax3A <= -ScreenWidth)
-                {
-                    posXParallax3A = posXParallax3B + ScreenWidth;
-                }
-                //FONDO 3A Sale por la derecha -> fondo 3B entra por la izquierda
-                if (posXParallax3A > 0)
-                {
-                    posXParallax3B = posXParallax3A - ScreenWidth;
-                }
-                //FONDO 3B Sale por la izquierda -> fondo 3B entra por la derecha
-                if (posXParallax3B <= -ScreenWidth)
-                {
-                    posXParallax3B = posXParallax3A + ScreenWidth;
-                }
-                //FONDO 3B Sale por la derecha -> fondo 3A entra por la izquierda
-                if (posXParallax3B > 0)
-                {
-                    posXParallax3A = posXParallax3B - ScreenWidth;
-                }
-            }           
+            posXParallax["1A"] -= player.speed / 4 * player.dir;
+            posXParallax["1B"] -= player.speed / 4 * player.dir;
+            posXParallax["2A"] -= player.speed / 2 * player.dir;
+            posXParallax["2B"] -= player.speed / 2 * player.dir;
+            posXParallax["3A"] -= player.speed * player.dir;
+            posXParallax["3B"] -= player.speed * player.dir;
+            CheckParallax();
         }
 
-        static void CheckAnimations(float deltaTime)
+        static void CheckParallax()
         {
-            if (currentState == GameState.Playing)
-            {
-                frameTimer += deltaTime;
-                if (frameTimer >= frameDuration)
+                for (int i = 1; i < posXParallax.Count/2 + 1; i++)
                 {
-                    if (player.isAnimating)
+                    //FONDO A llega al limite por la izquierda -> fondo A entra por la derecha
+                    if (posXParallax[$"{i}A"] <= -gc.screenWidth)
                     {
-                        frame++;
-                        if (frame >= player.animaciones[player.animation].Length)
-                        {
-                            frame = 0;
-                        }
-                        frameTimer = 0f;
+                        posXParallax[$"{i}A"] = posXParallax[$"{i}B"] + gc.screenWidth;
                     }
-                    else
+                    //FONDO A Sale por la derecha -> fondo B entra por la izquierda
+                    if (posXParallax[$"{i}A"] > 0)
                     {
-                        string dir = (player.dir > 0) ? dir = "R" : dir = "L";
-                        SetAnimation($"idle_{dir}");
-                        player.isAnimating = true;
+                        posXParallax[$"{i}B"] = posXParallax[$"{i}A"] - gc.screenWidth;
                     }
-                    if (frame < player.animaciones[player.animation].Length)
+                    //FONDO B llega al limite por la izquierda -> fondo B entra por la derecha
+                    if (posXParallax[$"{i}B"] <= - gc.screenWidth)
                     {
-                        player.image = player.animaciones[player.animation][frame];
+                        posXParallax[$"{i}B"] = posXParallax[$"{i}A"] + gc.screenWidth;
+                    }
+                    //FONDO B Sale por la derecha -> fondo A entra por la izquierda
+                    if (posXParallax[$"{i}B"] > 0)
+                    {
+                        posXParallax[$"{i}A"] = posXParallax[$"{i}B"] - gc.screenWidth;
                     }
                 }
-            }                
+        }
+        static void CheckAnimations(float deltaTime)
+        {
+            gc.frameTimer += deltaTime;
+            if (gc.frameTimer >= gc.frameDuration)
+            {
+                gc.frame++;
+                if (gc.frame >= player.animaciones[player.animation].Length)
+                {
+                    gc.frame = 0;
+                }
+                gc.frameTimer = 0f;
+                if (gc.frame < player.animaciones[player.animation].Length)
+                {
+                    player.image = player.animaciones[player.animation][gc.frame];
+                }
+            }              
         }
 
         static void Move(int direction)
@@ -439,21 +391,19 @@ namespace MyGame
             {
                 player.dir = direction;
                 string dir = (player.dir > 0) ? dir = "R" : dir = "L";
-                if (player.posX >= 250 && direction < 0 || player.posX <= ScreenWidth - 250 && direction > 0)
+                if (player.posX >= 250 && direction < 0 || player.posX <= gc.screenWidth - 250 && direction > 0)
                 {
                     player.posX += player.speed * direction;
                 }
                 else
                 {
                     MoveParallax();
-                }             
+                }
                 if (!player.isJumping)
                 {
                     SetAnimation($"run_{dir}");
-                    player.isAnimating = true;
                 }
-
-            }      
+            }
         }
 
         static void Jump()
@@ -476,7 +426,7 @@ namespace MyGame
             {
                 if (player.animation != anim)
                 {
-                    frameDuration = player.animationSpeed[anim];
+                    gc.frameDuration = player.animationSpeed[anim];
                     player.animation = anim;
                 }
             }                
@@ -485,19 +435,23 @@ namespace MyGame
         static void AnimarPresentacion(float deltaTime)
         {
             float frameDuration = 0.03f;
-            frameTimer += deltaTime;
-            if (frameTimer >= frameDuration)
+            gc.frameTimer += deltaTime;
+            if (gc.frameTimer >= frameDuration)
             {
-                posYFondo1 -= 7;
-                posYFondo2 -= 7;
-                posYFondo3 -= 7;
-                if (currentState == GameState.Presentation && posYFondo3 <= 0)
+                for (int i = 0; i < posYFondo.Length; i++)
                 {
-                    posYFondo3 = 0;
+                    posYFondo[i] -= 7;
+                }
+                if (currentState == GameState.Presentation && posYFondo[2] <= 0)
+                {
+                    posYFondo[2] = 0;
                     sonidos[0].Stop();
                     currentState = GameState.Playing;
-                    player = new Character(ScreenWidth / 2 - 16, 0);
-                    //sonidos[1].PlayLooping();
+                    player = new Character(gc.screenWidth / 2 - 16, 0);
+                    if (gc.soundEnabled)
+                    {
+                        sonidos[1].PlayLooping();
+                    }
                 }
             }
         }
