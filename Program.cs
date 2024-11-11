@@ -1,30 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Media;
+using System.Threading.Tasks;
 using Tao.Sdl;
 
 namespace MyGame
 {
-
     class Program
     {
         class GameConfig
         {
             public int groundLevel = 718;
-            public int gravity = 1;
-            public int maxGravity = 50;
+            public float gravity = 9.8f;
             public int screenWidth = 1024;
             public int screenHeight = 768;
             public int screenMoveLimit = 350;
             public int score = 0;
-            public int lifes = 3;
+            public int lifes = 0;
+            public int timer;
+            public DateTime startTime;
             public bool soundEnabled = false;
             public bool debugMode = true;
             public string menuMessage = "Foxy Runner";
             public string subMessage = "Presiona 'R' para comenzar";
-            public float pauseCooldown = 0.3f;
-            public float lastPauseTime = 0;
+            public float keyCooldown = 0.3f;
+            public float lastKeyPressTime = 0;
             public float takeDamageCooldown = 1f;
             public float lastTakeDamageTime = 0;
         }
@@ -35,7 +35,9 @@ namespace MyGame
         static readonly Font[] font = new Font[6];
         static Character player;
         static Dictionary<string, Image[]> itemSprites;
-        static Item[] items;
+        static Dictionary<string, Image[]> enemiesSprites;
+        static List<Item> items = new List<Item>();
+        static List<Enemy> enemies = new List<Enemy>();
         enum GameState
         {
             Menu,
@@ -45,7 +47,18 @@ namespace MyGame
             GameOver,
             Victory
         }
-        static GameState currentState = GameState.Menu; 
+        enum Enemies
+        {
+            Bear,
+            Bird
+        }
+        enum Items
+        {
+            Gem,
+            Cherry,
+            Egg
+        }
+        static GameState currentState = GameState.Menu;
         static int[] posYFondo = new int[3]
         {
             0,gc.screenHeight,gc.screenHeight * 2
@@ -59,6 +72,12 @@ namespace MyGame
             {"3A", 0},
             {"3B", gc.screenWidth}
         };
+        static float previousTime;
+        static float currentTime;
+        static float deltaTime = currentTime - previousTime;
+        /// <summary>
+        /// Carga los assets que se utilizan en el juego (fuentes,sonidos,fondos,ui,etc)
+        /// </summary>
         static void LoadAssets()
         {
             font[0] = Engine.LoadFont("assets/fonts/1.ttf", 80);
@@ -87,34 +106,101 @@ namespace MyGame
             ui[5] = Engine.LoadImage("assets/UI/hpbar_inicial.png");
             ui[6] = Engine.LoadImage("assets/UI/hpbar_final.png");
             itemSprites = new Dictionary<string, Image[]>()
-                {
-                    {"Gem", new Image[]
-                        {
-                            Engine.LoadImage("assets/items/gem/1.png"),
-                            Engine.LoadImage("assets/items/gem/2.png"),
-                            Engine.LoadImage("assets/items/gem/3.png"),
-                            Engine.LoadImage("assets/items/gem/4.png"),
-                            Engine.LoadImage("assets/items/gem/5.png")
-                        }
+            {
+                {"Gem", new Image[]
+                    {
+                        Engine.LoadImage("assets/items/gem/1.png"),
+                        Engine.LoadImage("assets/items/gem/2.png"),
+                        Engine.LoadImage("assets/items/gem/3.png"),
+                        Engine.LoadImage("assets/items/gem/4.png"),
+                        Engine.LoadImage("assets/items/gem/5.png")
                     }
-                };
-            }
+                },
+                {"Cherry", new Image[]
+                    {
+                        Engine.LoadImage("assets/items/cherry/1.png"),
+                        Engine.LoadImage("assets/items/cherry/2.png"),
+                        Engine.LoadImage("assets/items/cherry/3.png"),
+                        Engine.LoadImage("assets/items/cherry/4.png"),
+                        Engine.LoadImage("assets/items/cherry/5.png"),
+                        Engine.LoadImage("assets/items/cherry/6.png"),
+                        Engine.LoadImage("assets/items/cherry/7.png")
+                    }
+                },
+                {"Egg", new Image[]
+                    {
+                        Engine.LoadImage("assets/items/egg/1.png")
+                    }
+                },
+                 {"Egg_destroy", new Image[]
+                    {
+                        Engine.LoadImage("assets/items/egg/1.png"),
+                        Engine.LoadImage("assets/items/egg/2.png"),
+                        Engine.LoadImage("assets/items/egg/3.png"),
+                        Engine.LoadImage("assets/items/egg/4.png"),
+                        Engine.LoadImage("assets/items/egg/5.png"),
+                        Engine.LoadImage("assets/items/egg/6.png"),
+                        Engine.LoadImage("assets/items/egg/6.png"),
+                        Engine.LoadImage("assets/items/egg/7.png"),
+                        Engine.LoadImage("assets/items/egg/8.png"),
+                        Engine.LoadImage("assets/items/egg/9.png"),
+                        Engine.LoadImage("assets/items/egg/10.png"),
+                        Engine.LoadImage("assets/items/egg/11.png"),
+                        Engine.LoadImage("assets/items/egg/12.png"),
+                    }
+                }
+            };
+            enemiesSprites = new Dictionary<string, Image[]>()
+            {
+                {"Bear_run_R", new Image[]
+                    {
+                        Engine.LoadImage("assets/enemies/bear/run_R/1.png"),
+                        Engine.LoadImage("assets/enemies/bear/run_R/2.png"),
+                        Engine.LoadImage("assets/enemies/bear/run_R/3.png"),
+                        Engine.LoadImage("assets/enemies/bear/run_R/4.png")
+                    }
+                },
+                {"Bear_run_L", new Image[]
+                    {
+                        Engine.LoadImage("assets/enemies/bear/run_L/1.png"),
+                        Engine.LoadImage("assets/enemies/bear/run_L/2.png"),
+                        Engine.LoadImage("assets/enemies/bear/run_L/3.png"),
+                        Engine.LoadImage("assets/enemies/bear/run_L/4.png")
+                    }
+                },
+                {"Bird_fly_R", new Image[]
+                    {
+                        Engine.LoadImage("assets/enemies/bird/fly_R/1.png"),
+                        Engine.LoadImage("assets/enemies/bird/fly_R/2.png"),
+                        Engine.LoadImage("assets/enemies/bird/fly_R/3.png"),
+                        Engine.LoadImage("assets/enemies/bird/fly_R/4.png")
+                    }
+                },
+                {"Bird_fly_L", new Image[]
+                    {
+                        Engine.LoadImage("assets/enemies/bird/fly_L/1.png"),
+                        Engine.LoadImage("assets/enemies/bird/fly_L/2.png"),
+                        Engine.LoadImage("assets/enemies/bird/fly_L/3.png"),
+                        Engine.LoadImage("assets/enemies/bird/fly_L/4.png")
+                    }
+                }
+            };
+        }
         static void Main(string[] args)
         {
             Engine.Initialize(gc.screenWidth, gc.screenHeight);
             LoadAssets();
-            float previousTime = Sdl.SDL_GetTicks() / 1000f;
             IniciarMenu();
-
             while (true)
             {
                 CheckInputs();
+                currentTime = Sdl.SDL_GetTicks() / 1000f;
+                
+                deltaTime = currentTime - previousTime;
+                previousTime = currentTime;
                 if (currentState != GameState.Paused)
-                {
-                    float currentTime = Sdl.SDL_GetTicks() / 1000f;
-                    float deltaTime = currentTime - previousTime;
-                    previousTime = currentTime;
-                    Update(deltaTime);
+                {                    
+                    Update();
                 }
                 Render();
             }
@@ -125,23 +211,23 @@ namespace MyGame
             public int posY;
             public int Maxhp = 125;
             public int currentHp;
-            public int speed = 4;
-            public bool isJumping = false;
+            public int speed = 120;
+            public bool isJumping = true;
             public bool isTakingDamage = false;
             public bool isMoving = false;
             public bool isIdle = false;
-            public int jumpVelocity = 0;
+            public float jumpVelocity = 0;
             public string animation = "idle_R";
             public string spriteDirection = "R";
-            public int jumpStrength = 12;
-            public int characterWidth = 32;
-            public int characterHeight = 33;
+            public int jumpStrength = 5;
+            public int characterWidth = 26;
+            public int characterHeight = 32;
             public int dir = 1;
             public int frame = 0;
             public float frameTimer = 0f;
             public Image image;
             public Dictionary<string, float> animationSpeed;
-            public Dictionary<string, Image[]> animaciones;
+            public Dictionary<string, Image[]> sprites;
 
             public Character(int startX, int startY)
             {
@@ -149,12 +235,15 @@ namespace MyGame
                 posY = startY;
                 currentHp = Maxhp;
                 LoadCharacterAssets();
-                image = animaciones[animation][0];
+                image = sprites[animation][0];
             }
 
+            /// <summary>
+            /// Carga en un diccionario todas las imagenes correspondientes a las animaciones del jugador
+            /// </summary>
             private void LoadCharacterAssets()
             {
-                animaciones = new Dictionary<string, Image[]>()
+                sprites = new Dictionary<string, Image[]>()
                 {
                     {"idle_R", new Image[]
                         {
@@ -244,7 +333,6 @@ namespace MyGame
                         }
                     }
                 };
-
                 animationSpeed = new Dictionary<string, float>()
                 {
                     {"idle_R", 0.15f},
@@ -254,7 +342,7 @@ namespace MyGame
                     {"jump_R", 0.18f},
                     {"jump_L", 0.18f},
                     {"crouch", 0.1f},
-                    {"hurt", 0.5f},
+                    {"hurt", 0.2f},
                     {"hurt2", 0.1f},
                     {"roll_L", 0.04f},
                     {"roll_R", 0.04f}
@@ -265,42 +353,140 @@ namespace MyGame
         {
             public int posX;
             public int posY;
-            public int value = 5;
-            public int speed = 4;
-            public int width = 32;
-            public int height = 33;
+            public int value;
+            public int width;
+            public int height;
+            public float speed;
             public int frame = 0;
             public float frameTimer = 0f;
             public float animationSpeed = 0.1f;
+            public bool active = true;
+            public bool animationLoop = true;            
+            public bool isProyectil = false;
+            public bool isHostil = false;
+            public bool toRemove = false;
+            public bool inRemoveQueue = false;
+            public Image[] destroySprites;
+            public Items id;
             public Image image;
             public Image[] sprites;
 
-            public Item(string id,int startX, int startY)
+            public Item(Items id,int startX, int startY)
             {
+                switch (id)
+                {
+                    case Items.Cherry:
+                        value = -15;
+                        width = 14;
+                        height = 12;
+                        isHostil = true;
+                        break;
+                    case Items.Gem:
+                        value = 25;
+                        width = 14;
+                        height = 12;
+                        break;
+                    case Items.Egg:
+                        value = 50;
+                        width = 14;
+                        height = 12;
+                        isProyectil = true;
+                        isHostil = true;
+                        destroySprites = itemSprites[$"{id}_destroy"];
+                        break;
+                }
+                this.id = id;
                 posX = startX;
                 posY = startY;
-                sprites = itemSprites[id];
+                sprites = itemSprites[$"{id}"];
                 image = sprites[0];
+            }
+        }
+        class Enemy
+        {
+            public int posX;
+            public int posY;
+            public int health;
+            public int speed;
+            public int damage;
+            public int width;
+            public int height;
+            public int frame = 0;
+            public int dir = -1;
+            public float frameTimer = 0f;
+            public float animationSpeed = 0.1f;
+            public float attackCD = 1f;
+            public float lastTimeAttack = 0f;
+            public string animation;
+            public string animationSprite;
+            public Enemies id;
+            public bool active = true;
+            public Image image;
+            public Image[] sprites;
+            public string spriteDirection = "L";
+
+            public Enemy(Enemies id, int startX, int startY)
+            {
+                switch (id)
+                {
+                    case Enemies.Bear:
+                        health = 15;
+                        speed = 100;
+                        damage = 125;
+                        width = 40;
+                        height = 50;
+                        animation = "run";
+                        break;
+                    case Enemies.Bird:
+                        health = 2;
+                        speed = 80;
+                        damage = 125;
+                        width = 38;
+                        height = 38;
+                        animation = "fly";
+                        break;
+                }
+                posX = startX;
+                posY = startY;
+                this.id = id;
+                sprites = enemiesSprites[$"{id}_{animation}_{spriteDirection}"];
+                image = enemiesSprites[$"{id}_{animation}_{spriteDirection}"][0];
             }
         }
         static void CheckInputs()
         {
-            float currentTime = Sdl.SDL_GetTicks() / 1000f;
-            if (Engine.KeyPress(Engine.KEY_P) && currentState != GameState.Menu && currentState != GameState.Presentation && (currentTime - gc.lastPauseTime > gc.pauseCooldown))
+            if (Engine.KeyPress(Engine.KEY_P) && currentState != GameState.Menu && currentState != GameState.Presentation && (currentTime - gc.lastKeyPressTime > gc.keyCooldown))
             {
-                gc.lastPauseTime = currentTime;
+                gc.lastKeyPressTime = currentTime;
                 gc.menuMessage = "PAUSA";
                 currentState = (currentState == GameState.Paused) ? GameState.Playing : GameState.Paused;
             }
             if (Engine.KeyPress(Engine.KEY_RIGHT) || Engine.KeyPress(Engine.KEY_D)) Move(1);
             if (Engine.KeyPress(Engine.KEY_LEFT) || Engine.KeyPress(Engine.KEY_A)) Move(-1);
             if (Engine.KeyPress(Engine.KEY_UP) || Engine.KeyPress(Engine.KEY_W) || Engine.KeyPress(Engine.KEY_ESP)) Jump();
-            if (Engine.KeyPress(Engine.KEY_DOWN) || Engine.KeyPress(Engine.KEY_S)) TakeDamage(5);
+            //if (Engine.KeyPress(Engine.KEY_DOWN) || Engine.KeyPress(Engine.KEY_S)) SetAnimation("crouch");
             if (Engine.KeyPress(Engine.KEY_ESC)) Environment.Exit(0);
-            if (Engine.KeyPress(Engine.KEY_R) && currentState == GameState.Menu)
+            if (Engine.KeyPress(Engine.KEY_1) && (currentTime - gc.lastKeyPressTime > gc.keyCooldown))
             {
-                currentState = GameState.Presentation;
-                gc.subMessage = "Buena Suerte!";
+                gc.lastKeyPressTime = currentTime;
+                gc.debugMode = !gc.debugMode;
+            }
+            if (Engine.KeyPress(Engine.KEY_R) && (currentTime - gc.lastKeyPressTime > gc.keyCooldown))
+            {
+                gc.lastKeyPressTime = currentTime;
+                switch (currentState)
+                {
+                    case GameState.Menu:
+                        currentState = GameState.Presentation;
+                        break;
+                    case GameState.Victory:
+                    case GameState.GameOver:
+                        ResetGame();
+                        break;
+                    default:
+                        break;
+                }
+                
             }
             if (currentState == GameState.Playing && !Engine.KeyPress(Engine.KEY_RIGHT) && !Engine.KeyPress(Engine.KEY_D) && !Engine.KeyPress(Engine.KEY_LEFT) && !Engine.KeyPress(Engine.KEY_A)) player.isMoving = false;
         }
@@ -314,12 +500,16 @@ namespace MyGame
                     Engine.Draw(player.image, player.posX, player.posY);
                     DrawUI();
                     DrawItems();
+                    DrawEnemies();
                     break;
 
                 case GameState.Paused:
                     DrawBackground();
+                    Engine.Draw(player.image, player.posX, player.posY);
                     DrawPause();
                     DrawUI();
+                    DrawItems();
+                    DrawEnemies();
                     break;
 
                 case GameState.Menu:
@@ -336,15 +526,18 @@ namespace MyGame
             }
                 Engine.Show();
         }
-        static void Update(float deltaTime)
+        static void Update()
         {
             switch (currentState)
             {
                 case GameState.Playing:
-                    UpdateAnimations(deltaTime);
-                    UpdateItems(deltaTime);
+                    UpdatePlayerSprite();
+                    UpdateEnemySprite();
+                    UpdateItems();
                     MoveItems();
-                    AplicateGravity();
+                    MoveEnemies();
+                    UpdateGravity();
+                    gc.timer = (int)(DateTime.Now - gc.startTime).TotalSeconds;
                     if (!player.isMoving && !player.isJumping && !player.isTakingDamage)
                     {
                         player.isIdle = true;
@@ -354,39 +547,33 @@ namespace MyGame
                     {
                         player.isIdle = false;
                     }
+                    if (player.isTakingDamage && currentTime - gc.lastTakeDamageTime <= gc.takeDamageCooldown)
+                    {
+                        SetAnimation($"hurt");
+                    }
+                    else if (currentTime - gc.lastTakeDamageTime >= gc.takeDamageCooldown)
+                    {
+                        player.isTakingDamage = false;
+                    }                    
                     break;
                 case GameState.Presentation:
                     AnimarPresentacion();
                     break;
+                case GameState.GameOver:                    
+                    break;
                 default:
                     break;
             }
-        
+            
+
+
         }
-        static void IniciarMenu()
-        {
-            currentState = GameState.Menu;
-            if (gc.soundEnabled)
-            {
-            sonidos[0].PlayLooping();
-            }
-        }
-        static void IniciarJuego()
-        {
-            posYFondo[2] = 0;
-            sonidos[0].Stop();
-            currentState = GameState.Playing;
-            player = new Character(gc.screenWidth / 2 - 16, 0);
-            player.isJumping = true;
-            items = new Item[1];
-            {
-                items[0] = new Item("Gem",600,600);
-            }
-            if (gc.soundEnabled)
-            {
-                sonidos[1].PlayLooping();
-            }
-        }
+
+        //----------Seccion de funciones del RENDER----------//
+
+        /// <summary>
+        /// Dibuja la interfaz y datos de debug
+        /// </summary>
         static void DrawUI()
         {
             Engine.Draw(ui[1], 75, 47); // HP Barra
@@ -408,15 +595,29 @@ namespace MyGame
             }
             Engine.Draw(ui[2], 10, 10); // Lifes
             Engine.DrawText($"Puntaje: {gc.score}", 820, 15, 232, 120, 55, font[3]);
+            Engine.DrawText($"Tiempo: {gc.timer}", 420, 15, 232, 120, 55, font[3]);
             Engine.DrawText($"x {gc.lifes}", 15, 85, 232, 120, 55, font[4]);
             if (gc.debugMode)
             {
-                Engine.DrawText($"Jumping: {player.isJumping.ToString()}", 25, 150, 232, 120, 55, font[3]);
-                Engine.DrawText($"Moving: {player.isMoving.ToString()}", 25, 170, 232, 120, 55, font[3]);
-                Engine.DrawText($"Idle: {player.isIdle.ToString()}", 25, 190, 232, 120, 55, font[3]);
-                Engine.DrawText($"Damage: {player.isTakingDamage.ToString()}", 25, 210, 232, 120, 55, font[3]);
+                Engine.DrawText($"Jumping: {player.isJumping}", 25, 150, 232, 120, 55, font[3]);
+                Engine.DrawText($"Moving: {player.isMoving}", 25, 170, 232, 120, 55, font[3]);
+                Engine.DrawText($"Idle: {player.isIdle}", 25, 190, 232, 120, 55, font[3]);
+                Engine.DrawText($"Damage: {player.isTakingDamage}", 25, 210, 232, 120, 55, font[3]);
+                Engine.DrawText($"Velocity-Y: {player.jumpVelocity}", 25, 230, 232, 120, 55, font[3]);
+                Engine.DrawText($"Deltatime: {deltaTime}", 25, 250, 232, 120, 55, font[3]);
+                Engine.DrawText($"CurrentTime: {currentTime}", 25, 270, 232, 120, 55, font[3]);
+                Engine.DrawText($"PreviousTime: {previousTime}", 25, 290, 232, 120, 55, font[3]);
+                Engine.DrawText($"LastDamageTime: {gc.lastTakeDamageTime}", 25, 310, 232, 120, 55, font[3]);
+                Engine.DrawText($"TakeDamage CD: {gc.takeDamageCooldown}", 25, 330, 232, 120, 55, font[3]);
+                Engine.DrawText($"Game State: {currentState}", 25, 350, 232, 120, 55, font[3]);
+                Engine.DrawText($"Enemies count: {enemies.Count}", 25, 370, 232, 120, 55, font[3]);
+                Engine.DrawText($"Items count: {items.Count}", 25, 390, 232, 120, 55, font[3]);
+
             }
         }
+        /// <summary>
+        /// Dibuja el fondo parallax
+        /// </summary>
         static void DrawBackground()
         {
             Engine.Draw(fondo[1], 0, 0);
@@ -427,13 +628,35 @@ namespace MyGame
             Engine.Draw(fondo[8], posXParallax["3A"], 0);
             Engine.Draw(fondo[9], posXParallax["3B"], 0);
         }
+        /// <summary>
+        /// Dibuja todos los items activos
+        /// </summary>
         static void DrawItems()
         {
-            for (int i = 0; i < items.Length; i++)
+            foreach (var item in items)
             {
-                Engine.Draw(items[i].image, items[i].posX, items[i].posY);
+                if (item.active)
+                {
+                    Engine.Draw(item.image, item.posX, item.posY);
+                }
             }
         }
+        /// <summary>
+        /// Dibuja todos los enemigos activos
+        /// </summary>
+        static void DrawEnemies()
+        {
+            foreach (var enemy in enemies)
+            {
+                if (enemy.active)
+                {
+                    Engine.Draw(enemy.image, enemy.posX, enemy.posY);
+                }
+            }
+        }
+        /// <summary>
+        /// Dibuja el fondo y los textos de la presentacion
+        /// </summary>
         static void DrawPresentacion()
         {
             Engine.Draw(fondo[0], 0, posYFondo[0]);
@@ -444,12 +667,20 @@ namespace MyGame
             Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 235, posYFondo[0] + 250, 243, 198, 35, font[0]);
             Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 120, posYFondo[0] + 450, 243, 198, 35, font[1]);
         }
+        /// <summary>
+        /// Dibuja la pantalla de derrota
+        /// </summary>
         static void DrawGameOver()
         {
             Engine.Draw(fondo[0], 0, posYFondo[0]);
-            gc.menuMessage = "Game Over";
-            Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 239, posYFondo[0] + 248, 232, 120, 55, font[0]);
+            Engine.Draw(ui[0], gc.screenWidth / 2 - 320, posYFondo[0] + 195);
+            Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 219, posYFondo[0] + 248, 232, 120, 55, font[0]);
+            Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 215, posYFondo[0] + 250, 243, 198, 35, font[0]);
+            Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 210, posYFondo[0] + 450, 243, 198, 35, font[3]);
         }
+        /// <summary>
+        /// Dibuja la pantalla de Menu
+        /// </summary>
         static void DrawMenu()
         {
             Engine.Draw(fondo[0], 0, posYFondo[0]);
@@ -458,119 +689,352 @@ namespace MyGame
             Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 235, posYFondo[0] + 250, 243, 198, 35, font[0]);
             Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 170, posYFondo[0] + 450, 243, 198, 35, font[3]);
         }
+        /// <summary>
+        /// Dibuja la interfaz de pausa
+        /// </summary>
         static void DrawPause()
         {
-            Engine.Draw(player.image, player.posX, player.posY);
-            Engine.Draw(ui[3], gc.screenWidth / 2 - 207, gc.screenHeight / 2 - 180); // Cartel
+            Engine.Draw(ui[3], gc.screenWidth / 2 - 207, gc.screenHeight / 2 - 180); // placeholder
             Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 120, gc.screenHeight / 2 - 150, 232, 120, 55, font[0]);
             Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 116, gc.screenHeight / 2 - 148, 243, 198, 35, font[0]);
         }
-        static void AplicateGravity()
+        
+        //----------Seccion de funciones del UPDATE----------//
+        static bool CheckCollision(Character a, Item b)
         {
-            
-            player.posY += player.jumpVelocity;
-            if (player.jumpVelocity <= gc.maxGravity)
+            return a.posX < b.posX + b.width &&
+                   a.posX + a.characterWidth > b.posX &&
+                   a.posY < b.posY + b.height &&
+                   a.posY + a.characterHeight > b.posY;
+        }
+        /// <summary>
+        /// Chequea si colisiona el jugador con un enemigo
+        /// </summary>
+        /// <param name="a">jugador</param>
+        /// <param name="b">enemigo</param>
+        /// <returns>Verdadero si hay collision</returns>
+        static bool CheckCollision(Character a, Enemy b)
+        {
+            return a.posX < b.posX + b.width &&
+                   a.posX + a.characterWidth > b.posX &&
+                   a.posY < b.posY + b.height &&
+                   a.posY + a.characterHeight > b.posY;
+        }
+        static void SpawnItems()
+        {
+            items.Add(new Item (Items.Gem, 600, 690));
+        }
+        static void SpawnEnemies()
+        {
+            enemies.Add(new Enemy(Enemies.Bird, 650, 200));
+            enemies.Add(new Enemy(Enemies.Bird, 700, 200));
+            enemies.Add(new Enemy(Enemies.Bird, 750, 200));
+            enemies.Add(new Enemy(Enemies.Bird, 800, 200));
+        }
+        /// <summary>
+        /// Muestra el menu de inicio del juego
+        /// </summary>
+        static void IniciarMenu()
+        {
+            currentState = GameState.Menu;
+            if (gc.soundEnabled)
             {
-            player.jumpVelocity += gc.gravity;
-            }
-            if (player.jumpVelocity > 0 && player.isJumping)
-            {
-                SetAnimation($"roll_{player.spriteDirection}");
-            }
-            if (player.posY >= gc.groundLevel - player.characterHeight)
-            {
-                player.posY = gc.groundLevel - player.characterHeight;
-                player.isJumping = false;
-                player.jumpVelocity = 0;
+            sonidos[0].PlayLooping();
             }
         }
-        static void UpdateAnimations(float deltaTime)
+        /// <summary>
+        /// Inicial el juego y crea al jugador
+        /// </summary>
+        static void IniciarJuego()
+        {
+            posYFondo[2] = 0;
+            sonidos[0].Stop();
+            gc.startTime = DateTime.Now;
+            currentState = GameState.Playing;
+            player = new Character(gc.screenWidth / 2 - 16, 0);
+            SpawnItems();
+            SpawnEnemies();
+            if (gc.soundEnabled)
+            {
+                sonidos[1].PlayLooping();
+            }
+        }
+
+        //----------Seccion de funciones del UPDATE----------//
+
+        /// <summary>
+        /// Aplica la gravedad al jugador
+        /// </summary>
+        /// <summary>
+        /// Chequea si colisiona el jugador con un item
+        /// </summary>
+        /// <param name="a">jugador</param>
+        /// <param name="b">item</param>
+        /// <returns>Verdadero si hay collision</returns>
+        static void UpdateGravity()
+        {
+            player.jumpVelocity += gc.gravity * deltaTime;
+            player.posY += (int)(player.jumpVelocity * deltaTime * 100);
+            if (player.jumpVelocity > 0 && player.isJumping)
+                {
+                    SetAnimation($"roll_{player.spriteDirection}");
+                }
+            CheckGroundCollision();
+        }        
+        /// <summary>
+        /// Se encarga de recorrer el array de imagenes de las animaciones del jugador y setear el sprite correspondiente
+        /// </summary>
+        static void UpdatePlayerSprite()
         {
             player.frameTimer += deltaTime;
             player.spriteDirection = (player.dir > 0) ? player.spriteDirection = "R" : player.spriteDirection = "L";
             if (player.frameTimer >= player.animationSpeed[player.animation])
             {
                 player.frame++;
-                if (player.frame >= player.animaciones[player.animation].Length)
+                if (player.frame >= player.sprites[player.animation].Length)
                 {
                     player.frame = 0;
                 }
                 player.frameTimer = 0f;
-                if (player.frame < player.animaciones[player.animation].Length)
+                if (player.frame < player.sprites[player.animation].Length)
                 {
-                    player.image = player.animaciones[player.animation][player.frame];
+                    player.image = player.sprites[player.animation][player.frame];
                 }
             }
         }
-        static void UpdateItems(float deltaTime)
-        {       
-            for (int i = 0; i < items.Length; i++)
+        /// <summary>
+        /// Recorre el array de enemigos y actualiza sus sprites 
+        /// </summary>
+        static void UpdateEnemySprite()
+        {
+            foreach (var enemy in enemies)
             {
-                items[i].frameTimer += deltaTime;
-                if (items[i].frameTimer >= items[i].animationSpeed)
+                if (enemy.active)
                 {
-                    items[i].frame++;
-                    if (items[i].frame >= items[i].sprites.Length)
+                    enemy.frameTimer += deltaTime;
+                    enemy.spriteDirection = (enemy.dir > 0) ? enemy.spriteDirection = "R" : enemy.spriteDirection = "L";
+                    if (enemy.animationSprite != $"{enemy.animation}_{enemy.spriteDirection}")
                     {
-                        items[i].frame = 0;
+                        enemy.animationSprite = ($"{enemy.animation}_{enemy.spriteDirection}");
+                        enemy.sprites = enemiesSprites[$"{enemy.id}_{enemy.animation}_{enemy.spriteDirection}"];
                     }
-                    items[i].frameTimer = 0f;
-                    if (items[i].frame < items[i].sprites.Length)
+                    if (enemy.frameTimer >= enemy.animationSpeed)
                     {
-                        items[i].image = items[i].sprites[items[i].frame];
+                        enemy.frame++;
+                        if (enemy.frame >= enemy.sprites.Length)
+                        {
+                            enemy.frame = 0;
+                        }
+                        enemy.frameTimer = 0f;
+                        if (enemy.frame < enemy.sprites.Length)
+                        {
+                            enemy.image = enemy.sprites[enemy.frame];
+                        }
                     }
                 }
-            }            
+            }
         }
+        /// <summary>
+        /// Recorre el array de items y actualiza sus sprites
+        /// </summary>
+        static void UpdateItems()
+        {
+            foreach (var item in items)
+            {
+                item.frameTimer += deltaTime;
+                if (item.frameTimer >= item.animationSpeed)
+                {
+                    item.frame++;
+                    if (item.frame >= item.sprites.Length)
+                    {
+                        if (item.animationLoop)
+                        {
+                            item.frame = 0;
+                        }
+                        else
+                        {
+                            item.frame = item.sprites.Length;
+                            item.toRemove = true;
+                        }
+                    }
+                    item.frameTimer = 0f;
+                    if (item.frame < item.sprites.Length)
+                    {
+                        item.image = item.sprites[item.frame];
+                    }
+                }
+            }
+        }
+        /// <summary>
+        /// Se encarga de actualizar la posicion de los Items
+        /// </summary>
         static void MoveItems()
         {
-            for (int i = 0; i < items.Length; i++)
+            ItemGarbageCollector();
+            foreach (var item in items)
             {
-                if (player.posX <= gc.screenMoveLimit || player.posX >= gc.screenWidth - gc.screenMoveLimit)
+                if (item.active)
                 {
-                    if ((!player.isIdle && !player.isJumping) || player.isMoving)
+                    // Items comunes
+                    if (player.posX <= gc.screenMoveLimit || player.posX >= gc.screenWidth - gc.screenMoveLimit)
                     {
-                        items[i].posX += items[i].speed * player.dir * -1;
+                        if ((!player.isIdle && !player.isJumping && !player.isTakingDamage) || player.isMoving)
+                        {
+                            item.posX += (int)(player.speed * player.dir * -1 * deltaTime);
+                        }
+                    }
+                    // Items tipo Proyectil
+                    if (item.isProyectil)
+                    {
+                        if (item.posY <= gc.groundLevel - 36)
+                        {
+                            item.speed += gc.gravity * deltaTime;
+                            item.posY += (int)(item.speed * deltaTime * 90);
+                        }
+                        else
+                        {
+                            item.sprites = item.destroySprites;
+                            item.animationLoop = false;
+                        }
+                    }
+                    // Item Collision
+                    if (CheckCollision(player, item))
+                    {
+                        item.active = false;
+                        if (!item.isHostil)
+                        {
+                            gc.score += item.value;
+                        }
+                        else
+                        {
+                            ModifyPlayerHP(item.value);
+                        }
                     }
                 }
             }
+            
         }
-        static void MoveParallax()
+        /// <summary>
+        /// Se encarga de remover de la lista los items inactivos
+        /// </summary>
+        static void ItemGarbageCollector()
         {
-            posXParallax["1A"] -= player.speed / 4 * player.dir;
-            posXParallax["1B"] -= player.speed / 4 * player.dir;
-            posXParallax["2A"] -= player.speed / 2 * player.dir;
-            posXParallax["2B"] -= player.speed / 2 * player.dir;
-            posXParallax["3A"] -= player.speed * player.dir;
-            posXParallax["3B"] -= player.speed * player.dir;
-            CheckParallax();
-        }
-        static void CheckParallax()
-        {
-            for (int i = 1; i < posXParallax.Count/2 + 1; i++)
+            List<Item> itemsToRemove = new List<Item>();
+            foreach (var item in items)
+            {
+                if ((!item.active || item.toRemove) && !item.inRemoveQueue)
                 {
-                //FONDO A llega al limite por la izquierda -> fondo A entra por la derecha
-                if (posXParallax[$"{i}A"] <= -gc.screenWidth)
-                    {
-                        posXParallax[$"{i}A"] = posXParallax[$"{i}B"] + gc.screenWidth;
-                    }
-                    //FONDO A Sale por la derecha -> fondo B entra por la izquierda
-                if (posXParallax[$"{i}A"] > 0)
-                    {
-                        posXParallax[$"{i}B"] = posXParallax[$"{i}A"] - gc.screenWidth;
-                    }
-                    //FONDO B llega al limite por la izquierda -> fondo B entra por la derecha
-                if (posXParallax[$"{i}B"] <= - gc.screenWidth)
-                    {
-                        posXParallax[$"{i}B"] = posXParallax[$"{i}A"] + gc.screenWidth;
-                    }
-                    //FONDO B Sale por la derecha -> fondo A entra por la izquierda
-                if (posXParallax[$"{i}B"] > 0)
-                    {
-                        posXParallax[$"{i}A"] = posXParallax[$"{i}B"] - gc.screenWidth;
-                    }
+                    item.inRemoveQueue = true;
+                    itemsToRemove.Add(item);
+                }
+            }
+            foreach (var item in itemsToRemove)
+            {
+                RemoveItem(item);
             }
         }
+        /// <summary>
+        /// Se encarga de actualizar la posicion de los Enemigos
+        /// </summary>
+        static void MoveEnemies()
+        {
+            foreach (var enemy in enemies)
+            {
+                if (enemy.active)
+                {
+                    if (enemy.posX <= 0 || enemy.posX >= gc.screenWidth - enemy.width)
+                    {
+                        int inicialDir = enemy.dir;
+                        if (enemy.posX <= 0)
+                        {
+                            if (enemy.dir < 0)
+                            {
+                                enemy.dir *= -1;
+                            }
+                        }
+                        else
+                        {
+                            if (enemy.dir > 0)
+                            {
+                                enemy.dir *= -1;
+                            }
+                        }
+                        if (enemy.health > 0 && enemy.dir != inicialDir)
+                        {
+                            enemy.health--;
+                        }
+                        else if (enemy.dir != inicialDir)
+                        {
+                            enemy.active = false;
+                        }
+                    }
+                    if (player.posX <= gc.screenMoveLimit || player.posX >= gc.screenWidth - gc.screenMoveLimit)
+                    {
+                        if ((!player.isIdle && !player.isJumping && !player.isTakingDamage) || player.isMoving)
+                        {
+                            enemy.posX += (int)(player.speed * player.dir * -1 * deltaTime);
+                        }
+                    }
+                    if (CheckCollision(player, enemy))
+                    {
+                        ModifyPlayerHP(enemy.damage);
+                    }
+                    CheckEnemyAttack(enemy);
+                    enemy.posX += (int)(enemy.speed * enemy.dir * deltaTime);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Se encarga de mover en el eje X mis imagenes de fondo para generar el efecto Parallax (cada par de imagenes se mueve a una velocidad distinta)
+        /// </summary>
+        static void MoveParallax()
+        {
+            posXParallax["1A"] -= (int) (player.speed / 4 * player.dir * deltaTime);
+            posXParallax["1B"] -= (int) (player.speed / 4 * player.dir * deltaTime);
+            posXParallax["2A"] -= (int) (player.speed / 2 * player.dir * deltaTime);
+            posXParallax["2B"] -= (int) (player.speed / 2 * player.dir * deltaTime);
+            posXParallax["3A"] -= (int) (player.speed * player.dir * deltaTime);
+            posXParallax["3B"] -= (int) (player.speed * player.dir * deltaTime);
+            CheckParallax();
+        }
+        /// <summary>
+        /// Chequea cuando mis imagenes del Parallax llegan al final de la pantalla y las reubica
+        /// </summary>
+        static void CheckParallax()
+        {
+            //Mi parallax consiste de 3 pares de imagenes
+            for (int i = 1; i < posXParallax.Count/2 + 1; i++)
+            {
+                //FONDO A llega al limite por la izquierda -> fondo A entra por la derecha
+                if (posXParallax[$"{i}A"] <= -gc.screenWidth)
+                {
+                    posXParallax[$"{i}A"] = posXParallax[$"{i}B"] + gc.screenWidth;
+                }
+                //FONDO A Sale por la derecha -> fondo B entra por la izquierda
+                if (posXParallax[$"{i}A"] > 0)
+                {
+                    posXParallax[$"{i}B"] = posXParallax[$"{i}A"] - gc.screenWidth;
+                }
+                //FONDO B llega al limite por la izquierda -> fondo B entra por la derecha
+                if (posXParallax[$"{i}B"] <= - gc.screenWidth)
+                {
+                    posXParallax[$"{i}B"] = posXParallax[$"{i}A"] + gc.screenWidth;
+                }
+                //FONDO B Sale por la derecha -> fondo A entra por la izquierda
+                if (posXParallax[$"{i}B"] > 0)
+                {
+                    posXParallax[$"{i}A"] = posXParallax[$"{i}B"] - gc.screenWidth;
+                }
+            }
+        }
+
+        //----------Seccion de funciones de INPUTS----------//
+
+        /// <summary>
+        /// Se encarga de mover al Personaje hacia la izquierda o derecha
+        /// </summary>
+        /// <param name="direction">define la direccion del movimiento, siendo -1 a la izquierda y 1 a la derecha</param>
         static void Move(int direction)
         {
             if (currentState == GameState.Playing)
@@ -579,7 +1043,7 @@ namespace MyGame
                 player.dir = direction;
                 if (player.posX >= gc.screenMoveLimit && direction < 0 || player.posX <= gc.screenWidth - gc.screenMoveLimit && direction > 0)
                 {
-                    player.posX += player.speed * direction;                    
+                    player.posX += (int) (player.speed * direction * deltaTime);                    
                 }
                 else
                 {
@@ -591,6 +1055,9 @@ namespace MyGame
                 }
             }
         }
+        /// <summary>
+        /// Chequea si el jugador esta saltando, y si no lo esta inicia el salto
+        /// </summary>
         static void Jump()
         {
             if (currentState == GameState.Playing)
@@ -603,40 +1070,126 @@ namespace MyGame
                 }
             }                
         }
-        static void TakeDamage(int damage)
+       
+        //----------Seccion de funciones Auxiliares----------//
+
+        /// <summary>
+        /// Chequea si el jugador esta en el suelo
+        /// </summary>
+        static void CheckGroundCollision()
         {
-            float currentTime = Sdl.SDL_GetTicks() / 1000f;
+            if (player.posY >= gc.groundLevel - player.characterHeight)
+            {
+                player.posY = gc.groundLevel - player.characterHeight;
+                player.isJumping = false;
+                player.jumpVelocity = 0;
+            }
+        }
+        /// <summary>
+        /// Chequea si la barra de vida del jugador llega a 0, en tal caso resta 1 a las vidas, en caso de no quedar mas vidas disponibles, dispara el fin del juego
+        /// </summary>
+        static void CheckDefeat()
+        {
+            if (gc.lifes <= 0)
+            {
+                Console.WriteLine("Juego Terminado");
+                gc.menuMessage = "Game Over";
+                gc.subMessage = "Presiona 'R' para volver al menu";
+                currentState = GameState.GameOver;
+                posYFondo = new int[3]
+                {
+                0,gc.screenHeight,gc.screenHeight * 2
+                };
+            }
+            else
+            {
+                gc.lifes--;
+                ResetPlayer();
+            }           
+        }
+        /// <summary>
+        /// Resetea las variables del juego como puntaje y vidas 
+        /// </summary>
+        static void CheckEnemyAttack(Enemy e)
+        {
+            switch (e.id)
+            {
+                case Enemies.Bird:
+                    if (player.posX < e.posX + e.width && player.posX + player.characterWidth > e.posX && (currentTime - e.lastTimeAttack > e.attackCD))
+                    {
+                        e.lastTimeAttack = currentTime;
+                        items.Add(new Item(Items.Egg, e.posX, e.posY));
+                    }
+                        break;
+                default:
+                    break;
+            }            
+        }
+        /// <summary>
+        /// Remueve un item de la lista
+        /// </summary>
+        /// <param name="i">indice del item a remover</param>
+        static void RemoveItem(Item i)
+        {
+            items.Remove(i);
+        }
+        /// <summary>
+        /// Reinicia el puntaje,vidas,timer,enemigos,items etc y vuelve al menu
+        /// </summary>
+        static void ResetGame()
+        {
+            currentState = GameState.Menu;
+            gc.menuMessage = "Foxy Runner";
+            gc.subMessage = "Presiona 'R' para comenzar";
+            gc.score = 0;
+            gc.lifes = 3;
+            posYFondo = new int[3]
+            {
+                0,gc.screenHeight,gc.screenHeight * 2
+            };
+            items.Clear();
+            enemies.Clear();
+        }
+        /// <summary>
+        /// Se encarga de Dañar o Curar al jugador
+        /// </summary>
+        /// <param name="value">si este valor es positivo, dañara al personaje, si es negativo lo curara</param>
+        static void ModifyPlayerHP(int value)
+        {
+            if (value < 0)
+            {
+                if (player.currentHp - value < player.Maxhp)
+                {
+                    player.currentHp -= value;
+                }
+                else player.currentHp = player.Maxhp;
+                return;
+            }
             if (currentTime - gc.lastTakeDamageTime >= gc.takeDamageCooldown && !player.isTakingDamage)
             {
                 player.isTakingDamage = true;
-                SetAnimation("hurt");
-                player.currentHp -= damage;
+                player.currentHp -= value;
                 gc.lastTakeDamageTime = currentTime;
             }
-            else
-            { 
-                player.isTakingDamage = false;
-            }
-            //SetAnimation("hurt");
-
             if (player.currentHp <= 0)
             {
-                if (gc.lifes == 0)
-                {
-                    currentState = GameState.GameOver;
-                }
-                else
-                {
-                    gc.lifes--;
-                    player.isTakingDamage = false;
-                    player.currentHp = player.Maxhp;
-                    player.posY = -32;
-                    player.isJumping = true;
-                    player.posX = gc.screenWidth / 2 - 16;
-                }
-
+                CheckDefeat();
             }
         }
+        /// <summary>
+        /// Resetea la vida y posicion del jugador
+        /// </summary>
+        static void ResetPlayer()
+        {
+            player.currentHp = player.Maxhp;
+            player.posY = -player.characterHeight;
+            player.isJumping = true;
+            player.posX = gc.screenWidth / 2 - player.characterWidth / 2;
+        }
+        /// <summary>
+        /// Asigna la animacion y la velocidad de actualizacion de la misma al jugador
+        /// </summary>
+        /// <param name="anim">texto correspondiente a la animacion (debe coincidir con las animaciones definidas en el diccionario de animaciones del jugador) </param>
         static void SetAnimation(string anim)
         {
             if (currentState == GameState.Playing)
@@ -646,10 +1199,15 @@ namespace MyGame
                     player.frameTimer = player.animationSpeed[anim];
                     player.animation = anim;
                 }
-            }                
+            }
         }
+        /// <summary>
+        /// Se encarga de mover las imagenes de la intro
+        /// </summary>
         static void AnimarPresentacion()
         {
+            
+            gc.subMessage = "Buena Suerte!";
             for (int i = 0; i < posYFondo.Length; i++)
             {
                 posYFondo[i] -= 7;
