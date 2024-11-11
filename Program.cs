@@ -16,7 +16,7 @@ namespace MyGame
             public int screenHeight = 768;
             public int screenMoveLimit = 350;
             public int score = 0;
-            public int lifes = 0;
+            public int lifes = 3;
             public int timer;
             public DateTime startTime;
             public bool soundEnabled = false;
@@ -38,6 +38,9 @@ namespace MyGame
         static Dictionary<string, Image[]> enemiesSprites;
         static List<Item> items = new List<Item>();
         static List<Enemy> enemies = new List<Enemy>();
+        /// <summary>
+        /// Estados de juego disponibles
+        /// </summary>
         enum GameState
         {
             Menu,
@@ -47,18 +50,24 @@ namespace MyGame
             GameOver,
             Victory
         }
+        /// <summary>
+        /// Enemigos disponibles en el juego
+        /// </summary>
         enum Enemies
         {
             Bear,
             Bird
         }
+        /// <summary>
+        /// items disponibles en el juego
+        /// </summary>
         enum Items
         {
             Gem,
             Cherry,
             Egg
         }
-        static GameState currentState = GameState.Menu;
+        static GameState gameState = GameState.Menu;
         static int[] posYFondo = new int[3]
         {
             0,gc.screenHeight,gc.screenHeight * 2
@@ -198,13 +207,16 @@ namespace MyGame
                 
                 deltaTime = currentTime - previousTime;
                 previousTime = currentTime;
-                if (currentState != GameState.Paused)
+                if (gameState != GameState.Paused)
                 {                    
                     Update();
                 }
                 Render();
             }
         }
+
+        //----------Clases Principales----------//
+
         class Character
         {
             public int posX;
@@ -421,6 +433,8 @@ namespace MyGame
             public string animationSprite;
             public Enemies id;
             public bool active = true;
+            public bool toRemove = false;
+            public bool inRemoveQueue = false;
             public Image image;
             public Image[] sprites;
             public string spriteDirection = "L";
@@ -453,13 +467,16 @@ namespace MyGame
                 image = enemiesSprites[$"{id}_{animation}_{spriteDirection}"][0];
             }
         }
+
+        //----------Funciones Principales----------//
+
         static void CheckInputs()
         {
-            if (Engine.KeyPress(Engine.KEY_P) && currentState != GameState.Menu && currentState != GameState.Presentation && (currentTime - gc.lastKeyPressTime > gc.keyCooldown))
+            if (Engine.KeyPress(Engine.KEY_P) && gameState != GameState.Menu && gameState != GameState.Presentation && (currentTime - gc.lastKeyPressTime > gc.keyCooldown))
             {
                 gc.lastKeyPressTime = currentTime;
                 gc.menuMessage = "PAUSA";
-                currentState = (currentState == GameState.Paused) ? GameState.Playing : GameState.Paused;
+                gameState = (gameState == GameState.Paused) ? GameState.Playing : GameState.Paused;
             }
             if (Engine.KeyPress(Engine.KEY_RIGHT) || Engine.KeyPress(Engine.KEY_D)) Move(1);
             if (Engine.KeyPress(Engine.KEY_LEFT) || Engine.KeyPress(Engine.KEY_A)) Move(-1);
@@ -474,10 +491,10 @@ namespace MyGame
             if (Engine.KeyPress(Engine.KEY_R) && (currentTime - gc.lastKeyPressTime > gc.keyCooldown))
             {
                 gc.lastKeyPressTime = currentTime;
-                switch (currentState)
+                switch (gameState)
                 {
                     case GameState.Menu:
-                        currentState = GameState.Presentation;
+                        gameState = GameState.Presentation;
                         break;
                     case GameState.Victory:
                     case GameState.GameOver:
@@ -488,12 +505,12 @@ namespace MyGame
                 }
                 
             }
-            if (currentState == GameState.Playing && !Engine.KeyPress(Engine.KEY_RIGHT) && !Engine.KeyPress(Engine.KEY_D) && !Engine.KeyPress(Engine.KEY_LEFT) && !Engine.KeyPress(Engine.KEY_A)) player.isMoving = false;
+            if (gameState == GameState.Playing && !Engine.KeyPress(Engine.KEY_RIGHT) && !Engine.KeyPress(Engine.KEY_D) && !Engine.KeyPress(Engine.KEY_LEFT) && !Engine.KeyPress(Engine.KEY_A)) player.isMoving = false;
         }
         static void Render()
         {
             Engine.Clear();
-            switch (currentState)
+            switch (gameState)
             {
                 case GameState.Playing:
                     DrawBackground();
@@ -528,14 +545,14 @@ namespace MyGame
         }
         static void Update()
         {
-            switch (currentState)
+            switch (gameState)
             {
                 case GameState.Playing:
                     UpdatePlayerSprite();
                     UpdateEnemySprite();
-                    UpdateItems();
-                    MoveItems();
-                    MoveEnemies();
+                    UpdateItemSprites();
+                    UpdateItemPosition();
+                    UpdateEnemyPosition();
                     UpdateGravity();
                     gc.timer = (int)(DateTime.Now - gc.startTime).TotalSeconds;
                     if (!player.isMoving && !player.isJumping && !player.isTakingDamage)
@@ -564,9 +581,6 @@ namespace MyGame
                 default:
                     break;
             }
-            
-
-
         }
 
         //----------Seccion de funciones del RENDER----------//
@@ -609,7 +623,7 @@ namespace MyGame
                 Engine.DrawText($"PreviousTime: {previousTime}", 25, 290, 232, 120, 55, font[3]);
                 Engine.DrawText($"LastDamageTime: {gc.lastTakeDamageTime}", 25, 310, 232, 120, 55, font[3]);
                 Engine.DrawText($"TakeDamage CD: {gc.takeDamageCooldown}", 25, 330, 232, 120, 55, font[3]);
-                Engine.DrawText($"Game State: {currentState}", 25, 350, 232, 120, 55, font[3]);
+                Engine.DrawText($"Game State: {gameState}", 25, 350, 232, 120, 55, font[3]);
                 Engine.DrawText($"Enemies count: {enemies.Count}", 25, 370, 232, 120, 55, font[3]);
                 Engine.DrawText($"Items count: {items.Count}", 25, 390, 232, 120, 55, font[3]);
 
@@ -700,26 +714,7 @@ namespace MyGame
         }
         
         //----------Seccion de funciones del UPDATE----------//
-        static bool CheckCollision(Character a, Item b)
-        {
-            return a.posX < b.posX + b.width &&
-                   a.posX + a.characterWidth > b.posX &&
-                   a.posY < b.posY + b.height &&
-                   a.posY + a.characterHeight > b.posY;
-        }
-        /// <summary>
-        /// Chequea si colisiona el jugador con un enemigo
-        /// </summary>
-        /// <param name="a">jugador</param>
-        /// <param name="b">enemigo</param>
-        /// <returns>Verdadero si hay collision</returns>
-        static bool CheckCollision(Character a, Enemy b)
-        {
-            return a.posX < b.posX + b.width &&
-                   a.posX + a.characterWidth > b.posX &&
-                   a.posY < b.posY + b.height &&
-                   a.posY + a.characterHeight > b.posY;
-        }
+
         static void SpawnItems()
         {
             items.Add(new Item (Items.Gem, 600, 690));
@@ -736,7 +731,7 @@ namespace MyGame
         /// </summary>
         static void IniciarMenu()
         {
-            currentState = GameState.Menu;
+            gameState = GameState.Menu;
             if (gc.soundEnabled)
             {
             sonidos[0].PlayLooping();
@@ -750,7 +745,7 @@ namespace MyGame
             posYFondo[2] = 0;
             sonidos[0].Stop();
             gc.startTime = DateTime.Now;
-            currentState = GameState.Playing;
+            gameState = GameState.Playing;
             player = new Character(gc.screenWidth / 2 - 16, 0);
             SpawnItems();
             SpawnEnemies();
@@ -765,12 +760,6 @@ namespace MyGame
         /// <summary>
         /// Aplica la gravedad al jugador
         /// </summary>
-        /// <summary>
-        /// Chequea si colisiona el jugador con un item
-        /// </summary>
-        /// <param name="a">jugador</param>
-        /// <param name="b">item</param>
-        /// <returns>Verdadero si hay collision</returns>
         static void UpdateGravity()
         {
             player.jumpVelocity += gc.gravity * deltaTime;
@@ -837,7 +826,7 @@ namespace MyGame
         /// <summary>
         /// Recorre el array de items y actualiza sus sprites
         /// </summary>
-        static void UpdateItems()
+        static void UpdateItemSprites()
         {
             foreach (var item in items)
             {
@@ -868,7 +857,7 @@ namespace MyGame
         /// <summary>
         /// Se encarga de actualizar la posicion de los Items
         /// </summary>
-        static void MoveItems()
+        static void UpdateItemPosition()
         {
             ItemGarbageCollector();
             foreach (var item in items)
@@ -915,29 +904,11 @@ namespace MyGame
             
         }
         /// <summary>
-        /// Se encarga de remover de la lista los items inactivos
-        /// </summary>
-        static void ItemGarbageCollector()
-        {
-            List<Item> itemsToRemove = new List<Item>();
-            foreach (var item in items)
-            {
-                if ((!item.active || item.toRemove) && !item.inRemoveQueue)
-                {
-                    item.inRemoveQueue = true;
-                    itemsToRemove.Add(item);
-                }
-            }
-            foreach (var item in itemsToRemove)
-            {
-                RemoveItem(item);
-            }
-        }
-        /// <summary>
         /// Se encarga de actualizar la posicion de los Enemigos
         /// </summary>
-        static void MoveEnemies()
+        static void UpdateEnemyPosition()
         {
+            EnemyGarbageCollector();
             foreach (var enemy in enemies)
             {
                 if (enemy.active)
@@ -985,50 +956,6 @@ namespace MyGame
             }
         }
 
-        /// <summary>
-        /// Se encarga de mover en el eje X mis imagenes de fondo para generar el efecto Parallax (cada par de imagenes se mueve a una velocidad distinta)
-        /// </summary>
-        static void MoveParallax()
-        {
-            posXParallax["1A"] -= (int) (player.speed / 4 * player.dir * deltaTime);
-            posXParallax["1B"] -= (int) (player.speed / 4 * player.dir * deltaTime);
-            posXParallax["2A"] -= (int) (player.speed / 2 * player.dir * deltaTime);
-            posXParallax["2B"] -= (int) (player.speed / 2 * player.dir * deltaTime);
-            posXParallax["3A"] -= (int) (player.speed * player.dir * deltaTime);
-            posXParallax["3B"] -= (int) (player.speed * player.dir * deltaTime);
-            CheckParallax();
-        }
-        /// <summary>
-        /// Chequea cuando mis imagenes del Parallax llegan al final de la pantalla y las reubica
-        /// </summary>
-        static void CheckParallax()
-        {
-            //Mi parallax consiste de 3 pares de imagenes
-            for (int i = 1; i < posXParallax.Count/2 + 1; i++)
-            {
-                //FONDO A llega al limite por la izquierda -> fondo A entra por la derecha
-                if (posXParallax[$"{i}A"] <= -gc.screenWidth)
-                {
-                    posXParallax[$"{i}A"] = posXParallax[$"{i}B"] + gc.screenWidth;
-                }
-                //FONDO A Sale por la derecha -> fondo B entra por la izquierda
-                if (posXParallax[$"{i}A"] > 0)
-                {
-                    posXParallax[$"{i}B"] = posXParallax[$"{i}A"] - gc.screenWidth;
-                }
-                //FONDO B llega al limite por la izquierda -> fondo B entra por la derecha
-                if (posXParallax[$"{i}B"] <= - gc.screenWidth)
-                {
-                    posXParallax[$"{i}B"] = posXParallax[$"{i}A"] + gc.screenWidth;
-                }
-                //FONDO B Sale por la derecha -> fondo A entra por la izquierda
-                if (posXParallax[$"{i}B"] > 0)
-                {
-                    posXParallax[$"{i}A"] = posXParallax[$"{i}B"] - gc.screenWidth;
-                }
-            }
-        }
-
         //----------Seccion de funciones de INPUTS----------//
 
         /// <summary>
@@ -1037,7 +964,7 @@ namespace MyGame
         /// <param name="direction">define la direccion del movimiento, siendo -1 a la izquierda y 1 a la derecha</param>
         static void Move(int direction)
         {
-            if (currentState == GameState.Playing)
+            if (gameState == GameState.Playing)
             {
                 player.isMoving = true;
                 player.dir = direction;
@@ -1060,7 +987,7 @@ namespace MyGame
         /// </summary>
         static void Jump()
         {
-            if (currentState == GameState.Playing)
+            if (gameState == GameState.Playing)
             {
                 if (!player.isJumping)
                 {
@@ -1070,9 +997,78 @@ namespace MyGame
                 }
             }                
         }
-       
+
         //----------Seccion de funciones Auxiliares----------//
 
+        /// <summary>
+        /// Se encarga de mover en el eje X mis imagenes de fondo para generar el efecto Parallax (cada par de imagenes se mueve a una velocidad distinta)
+        /// </summary>
+        static void MoveParallax()
+        {
+            posXParallax["1A"] -= (int)(player.speed / 4 * player.dir * deltaTime);
+            posXParallax["1B"] -= (int)(player.speed / 4 * player.dir * deltaTime);
+            posXParallax["2A"] -= (int)(player.speed / 2 * player.dir * deltaTime);
+            posXParallax["2B"] -= (int)(player.speed / 2 * player.dir * deltaTime);
+            posXParallax["3A"] -= (int)(player.speed * player.dir * deltaTime);
+            posXParallax["3B"] -= (int)(player.speed * player.dir * deltaTime);
+            CheckParallax();
+        }
+        /// <summary>
+        /// Chequea cuando mis imagenes del Parallax llegan al final de la pantalla y las reubica
+        /// </summary>
+        static void CheckParallax()
+        {
+            //Mi parallax consiste de 3 pares de imagenes
+            for (int i = 1; i < posXParallax.Count / 2 + 1; i++)
+            {
+                //FONDO A llega al limite por la izquierda -> fondo A entra por la derecha
+                if (posXParallax[$"{i}A"] <= -gc.screenWidth)
+                {
+                    posXParallax[$"{i}A"] = posXParallax[$"{i}B"] + gc.screenWidth;
+                }
+                //FONDO A Sale por la derecha -> fondo B entra por la izquierda
+                if (posXParallax[$"{i}A"] > 0)
+                {
+                    posXParallax[$"{i}B"] = posXParallax[$"{i}A"] - gc.screenWidth;
+                }
+                //FONDO B llega al limite por la izquierda -> fondo B entra por la derecha
+                if (posXParallax[$"{i}B"] <= -gc.screenWidth)
+                {
+                    posXParallax[$"{i}B"] = posXParallax[$"{i}A"] + gc.screenWidth;
+                }
+                //FONDO B Sale por la derecha -> fondo A entra por la izquierda
+                if (posXParallax[$"{i}B"] > 0)
+                {
+                    posXParallax[$"{i}A"] = posXParallax[$"{i}B"] - gc.screenWidth;
+                }
+            }
+        }
+        /// <summary>
+        /// Chequea si colisiona el jugador con un item
+        /// </summary>
+        /// <param name="a">jugador</param>
+        /// <param name="b">item</param>
+        /// <returns>Verdadero si hay collision</returns>
+        static bool CheckCollision(Character a, Item b)
+        {
+            return a.posX < b.posX + b.width &&
+                   a.posX + a.characterWidth > b.posX &&
+                   a.posY < b.posY + b.height &&
+                   a.posY + a.characterHeight > b.posY;
+        }
+        /// <summary>
+        /// Chequea si colisiona el jugador con un enemigo
+        /// </summary>
+        /// <param name="a">jugador</param>
+        /// <param name="b">enemigo</param>
+        /// <returns>Verdadero si hay collision</returns>
+        static bool CheckCollision(Character a, Enemy b)
+        {
+            return a.posX < b.posX + b.width &&
+                   a.posX + a.characterWidth > b.posX &&
+                   a.posY < b.posY + b.height &&
+                   a.posY + a.characterHeight > b.posY;
+        }
         /// <summary>
         /// Chequea si el jugador esta en el suelo
         /// </summary>
@@ -1095,7 +1091,7 @@ namespace MyGame
                 Console.WriteLine("Juego Terminado");
                 gc.menuMessage = "Game Over";
                 gc.subMessage = "Presiona 'R' para volver al menu";
-                currentState = GameState.GameOver;
+                gameState = GameState.GameOver;
                 posYFondo = new int[3]
                 {
                 0,gc.screenHeight,gc.screenHeight * 2
@@ -1126,6 +1122,44 @@ namespace MyGame
             }            
         }
         /// <summary>
+        /// Se encarga de remover de la lista los items inactivos
+        /// </summary>
+        static void ItemGarbageCollector()
+        {
+            List<Item> itemsToRemove = new List<Item>();
+            foreach (var item in items)
+            {
+                if ((!item.active || item.toRemove) && !item.inRemoveQueue)
+                {
+                    item.inRemoveQueue = true;
+                    itemsToRemove.Add(item);
+                }
+            }
+            foreach (var item in itemsToRemove)
+            {
+                RemoveItem(item);
+            }
+        }
+        /// <summary>
+        /// Se encarga de remover de la lista los enemigos inactivos
+        /// </summary>
+        static void EnemyGarbageCollector()
+        {
+            List<Enemy> enemyToRemove = new List<Enemy>();
+            foreach (var enemy in enemies)
+            {
+                if ((!enemy.active || enemy.toRemove) && !enemy.inRemoveQueue)
+                {
+                    enemy.inRemoveQueue = true;
+                    enemyToRemove.Add(enemy);
+                }
+            }
+            foreach (var enemy in enemyToRemove)
+            {
+                RemoveEnemy(enemy);
+            }
+        }
+        /// <summary>
         /// Remueve un item de la lista
         /// </summary>
         /// <param name="i">indice del item a remover</param>
@@ -1134,11 +1168,19 @@ namespace MyGame
             items.Remove(i);
         }
         /// <summary>
+        /// Remueve un enemigo de la lista
+        /// </summary>
+        /// <param name="i">indice del item a remover</param>
+        static void RemoveEnemy(Enemy e)
+        {
+            enemies.Remove(e);
+        }
+        /// <summary>
         /// Reinicia el puntaje,vidas,timer,enemigos,items etc y vuelve al menu
         /// </summary>
         static void ResetGame()
         {
-            currentState = GameState.Menu;
+            gameState = GameState.Menu;
             gc.menuMessage = "Foxy Runner";
             gc.subMessage = "Presiona 'R' para comenzar";
             gc.score = 0;
@@ -1192,7 +1234,7 @@ namespace MyGame
         /// <param name="anim">texto correspondiente a la animacion (debe coincidir con las animaciones definidas en el diccionario de animaciones del jugador) </param>
         static void SetAnimation(string anim)
         {
-            if (currentState == GameState.Playing)
+            if (gameState == GameState.Playing)
             {
                 if (player.animation != anim)
                 {
@@ -1212,7 +1254,7 @@ namespace MyGame
             {
                 posYFondo[i] -= 7;
             }
-            if (currentState == GameState.Presentation && posYFondo[2] <= 0)
+            if (gameState == GameState.Presentation && posYFondo[2] <= 0)
             {
                 IniciarJuego();
             }
