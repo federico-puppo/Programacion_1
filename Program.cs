@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Media;
+using System.Runtime.Remoting.Messaging;
 using System.Threading.Tasks;
 using Tao.Sdl;
 
@@ -16,20 +17,26 @@ namespace MyGame
             public int screenHeight = 768;
             public int screenMoveLimit = 350;
             public int score = 0;
-            public int lifes = 3;
+            public int lifes = 2;
+            public int scoreToWin = 1500;
             public int timer;
             public DateTime startTime;
-            public bool soundEnabled = false;
-            public bool debugMode = true;
+            public bool soundEnabled = true;
+            public bool debugMode = false;
             public string menuMessage = "Foxy Runner";
             public string subMessage = "Presiona 'R' para comenzar";
             public float keyCooldown = 0.3f;
             public float lastKeyPressTime = 0;
             public float takeDamageCooldown = 1f;
             public float lastTakeDamageTime = 0;
+            public float spawnEnemyCooldown = 5f;
+            public float lastSpawnEnemyTime = 0;
+            public float spawnItemCooldown = 1.2f;
+            public float lastSpawnItemTime = 0;
+
         }
         static readonly GameConfig gc = new GameConfig();
-        static readonly Image[] fondo = new Image[10];
+        static readonly Image[] fondo = new Image[12];
         static readonly Image[] ui = new Image[7];
         static readonly SoundPlayer[] sonidos = new SoundPlayer[2];
         static readonly Font[] font = new Font[6];
@@ -38,6 +45,7 @@ namespace MyGame
         static Dictionary<string, Image[]> enemiesSprites;
         static List<Item> items = new List<Item>();
         static List<Enemy> enemies = new List<Enemy>();
+        static Random random = new Random();
         /// <summary>
         /// Estados de juego disponibles
         /// </summary>
@@ -66,6 +74,14 @@ namespace MyGame
             Gem,
             Cherry,
             Egg
+        }
+        enum SpawnPattern
+        {
+            row,
+            line,
+            doble,
+            square,
+            single            
         }
         static GameState gameState = GameState.Menu;
         static int[] posYFondo = new int[3]
@@ -107,6 +123,8 @@ namespace MyGame
             fondo[7] = Engine.LoadImage("assets/backgrounds/parallax2.png");
             fondo[8] = Engine.LoadImage("assets/backgrounds/parallax3.png");
             fondo[9] = Engine.LoadImage("assets/backgrounds/parallax3.png");
+            fondo[10] = Engine.LoadImage("assets/backgrounds/victory.png");
+            fondo[11] = Engine.LoadImage("assets/backgrounds/defeat.png");
             ui[0] = Engine.LoadImage("assets/UI/title.png");
             ui[1] = Engine.LoadImage("assets/UI/hp.png");
             ui[2] = Engine.LoadImage("assets/UI/life.png");
@@ -223,7 +241,7 @@ namespace MyGame
             public int posY;
             public int Maxhp = 125;
             public int currentHp;
-            public int speed = 120;
+            public int speed = 90;
             public bool isJumping = true;
             public bool isTakingDamage = false;
             public bool isMoving = false;
@@ -399,7 +417,7 @@ namespace MyGame
                         height = 12;
                         break;
                     case Items.Egg:
-                        value = 50;
+                        value = 15;
                         width = 14;
                         height = 12;
                         isProyectil = true;
@@ -444,17 +462,17 @@ namespace MyGame
                 switch (id)
                 {
                     case Enemies.Bear:
-                        health = 15;
-                        speed = 100;
-                        damage = 125;
+                        health = 2;
+                        speed = 125;
+                        damage = 25;
                         width = 40;
                         height = 50;
                         animation = "run";
                         break;
                     case Enemies.Bird:
                         health = 2;
-                        speed = 80;
-                        damage = 125;
+                        speed = 190;
+                        damage = 15;
                         width = 38;
                         height = 38;
                         animation = "fly";
@@ -523,10 +541,10 @@ namespace MyGame
                 case GameState.Paused:
                     DrawBackground();
                     Engine.Draw(player.image, player.posX, player.posY);
-                    DrawPause();
                     DrawUI();
                     DrawItems();
                     DrawEnemies();
+                    DrawPause();
                     break;
 
                 case GameState.Menu:
@@ -536,7 +554,9 @@ namespace MyGame
                 case GameState.GameOver:
                     DrawGameOver();
                     break;
-
+                case GameState.Victory:
+                    DrawGameVictory();
+                    break;
                 case GameState.Presentation:
                     DrawPresentacion();
                     break;
@@ -554,6 +574,7 @@ namespace MyGame
                     UpdateItemPosition();
                     UpdateEnemyPosition();
                     UpdateGravity();
+                    GameManager();
                     gc.timer = (int)(DateTime.Now - gc.startTime).TotalSeconds;
                     if (!player.isMoving && !player.isJumping && !player.isTakingDamage)
                     {
@@ -576,10 +597,50 @@ namespace MyGame
                 case GameState.Presentation:
                     AnimarPresentacion();
                     break;
-                case GameState.GameOver:                    
-                    break;
                 default:
                     break;
+            }
+        }
+
+        //----------Seccion de funciones de INPUTS----------//
+
+        /// <summary>
+        /// Se encarga de mover al Personaje hacia la izquierda o derecha
+        /// </summary>
+        /// <param name="direction">define la direccion del movimiento, siendo -1 a la izquierda y 1 a la derecha</param>
+        static void Move(int direction)
+        {
+            if (gameState == GameState.Playing)
+            {
+                player.isMoving = true;
+                player.dir = direction;
+                if (player.posX >= gc.screenMoveLimit && direction < 0 || player.posX <= gc.screenWidth - gc.screenMoveLimit && direction > 0)
+                {
+                    player.posX += (int)(player.speed * direction * deltaTime);
+                }
+                else
+                {
+                    MoveParallax();
+                }
+                if (!player.isJumping && !player.isTakingDamage)
+                {
+                    SetAnimation($"run_{player.spriteDirection}");
+                }
+            }
+        }
+        /// <summary>
+        /// Chequea si el jugador esta saltando, y si no lo esta inicia el salto
+        /// </summary>
+        static void Jump()
+        {
+            if (gameState == GameState.Playing)
+            {
+                if (!player.isJumping)
+                {
+                    player.isJumping = true;
+                    player.jumpVelocity = -player.jumpStrength;
+                    SetAnimation($"jump_{player.spriteDirection}");
+                }
             }
         }
 
@@ -686,11 +747,25 @@ namespace MyGame
         /// </summary>
         static void DrawGameOver()
         {
-            Engine.Draw(fondo[0], 0, posYFondo[0]);
-            Engine.Draw(ui[0], gc.screenWidth / 2 - 320, posYFondo[0] + 195);
-            Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 219, posYFondo[0] + 248, 232, 120, 55, font[0]);
-            Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 215, posYFondo[0] + 250, 243, 198, 35, font[0]);
-            Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 210, posYFondo[0] + 450, 243, 198, 35, font[3]);
+            Engine.Draw(fondo[11], 0, 0);
+            Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 189, 268, 232, 120, 55, font[0]);
+            Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 185, 270, 243, 198, 35, font[0]);
+            Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 210, 720, 255, 255, 255, font[3]);
+            Engine.DrawText($"tu puntuacion fue: {gc.score}", gc.screenWidth / 2 - 110, 380, 255, 255, 255, font[3]);
+            Engine.DrawText($"duraste {gc.timer} segundos", gc.screenWidth / 2 - 110, 410, 255, 255, 255, font[3]);
+        }
+        /// <summary>
+        /// Dibuja la pantalla de victoria
+        /// </summary>
+        static void DrawGameVictory()
+        {
+            Engine.Draw(fondo[10], 0, 0);
+            Engine.Draw(ui[0],10,10);
+            Engine.DrawText($"{gc.menuMessage}", 159, 64, 232, 120, 55, font[0]);
+            Engine.DrawText($"{gc.menuMessage}", 155, 67, 243, 198, 35, font[0]);
+            Engine.DrawText($"{gc.subMessage}", gc.screenWidth / 2 - 210, 720, 0, 0, 0, font[3]);
+            Engine.DrawText($"tu puntuacion fue: {gc.score}", 685, 30, 243, 198, 35, font[3]);
+            Engine.DrawText($"tu tiempo fue: {gc.timer}", 685, 60, 243, 198, 35, font[3]);
         }
         /// <summary>
         /// Dibuja la pantalla de Menu
@@ -711,48 +786,6 @@ namespace MyGame
             Engine.Draw(ui[3], gc.screenWidth / 2 - 207, gc.screenHeight / 2 - 180); // placeholder
             Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 120, gc.screenHeight / 2 - 150, 232, 120, 55, font[0]);
             Engine.DrawText($"{gc.menuMessage}", gc.screenWidth / 2 - 116, gc.screenHeight / 2 - 148, 243, 198, 35, font[0]);
-        }
-        
-        //----------Seccion de funciones del UPDATE----------//
-
-        static void SpawnItems()
-        {
-            items.Add(new Item (Items.Gem, 600, 690));
-        }
-        static void SpawnEnemies()
-        {
-            enemies.Add(new Enemy(Enemies.Bird, 650, 200));
-            enemies.Add(new Enemy(Enemies.Bird, 700, 200));
-            enemies.Add(new Enemy(Enemies.Bird, 750, 200));
-            enemies.Add(new Enemy(Enemies.Bird, 800, 200));
-        }
-        /// <summary>
-        /// Muestra el menu de inicio del juego
-        /// </summary>
-        static void IniciarMenu()
-        {
-            gameState = GameState.Menu;
-            if (gc.soundEnabled)
-            {
-            sonidos[0].PlayLooping();
-            }
-        }
-        /// <summary>
-        /// Inicial el juego y crea al jugador
-        /// </summary>
-        static void IniciarJuego()
-        {
-            posYFondo[2] = 0;
-            sonidos[0].Stop();
-            gc.startTime = DateTime.Now;
-            gameState = GameState.Playing;
-            player = new Character(gc.screenWidth / 2 - 16, 0);
-            SpawnItems();
-            SpawnEnemies();
-            if (gc.soundEnabled)
-            {
-                sonidos[1].PlayLooping();
-            }
         }
 
         //----------Seccion de funciones del UPDATE----------//
@@ -893,11 +926,18 @@ namespace MyGame
                         if (!item.isHostil)
                         {
                             gc.score += item.value;
+                            CheckVictory();
                         }
                         else
                         {
                             ModifyPlayerHP(item.value);
                         }
+                    }
+                    // Remover items que se van de pantalla
+                    if (item.posX <= -gc.screenWidth)
+                    {
+                        item.toRemove = true;
+                        item.active = false;
                     }
                 }
             }
@@ -956,46 +996,118 @@ namespace MyGame
             }
         }
 
-        //----------Seccion de funciones de INPUTS----------//
-
-        /// <summary>
-        /// Se encarga de mover al Personaje hacia la izquierda o derecha
-        /// </summary>
-        /// <param name="direction">define la direccion del movimiento, siendo -1 a la izquierda y 1 a la derecha</param>
-        static void Move(int direction)
+        //----------Seccion de funciones del GAMEPLAY----------//
+        static void GameManager()
         {
-            if (gameState == GameState.Playing)
+            if (currentTime - gc.lastSpawnItemTime > gc.spawnItemCooldown && player.posX >= gc.screenWidth - gc.screenMoveLimit && !player.isIdle)
             {
-                player.isMoving = true;
-                player.dir = direction;
-                if (player.posX >= gc.screenMoveLimit && direction < 0 || player.posX <= gc.screenWidth - gc.screenMoveLimit && direction > 0)
-                {
-                    player.posX += (int) (player.speed * direction * deltaTime);                    
-                }
-                else
-                {
-                    MoveParallax();
-                }
-                if (!player.isJumping && !player.isTakingDamage)
-                {
-                SetAnimation($"run_{player.spriteDirection}");
-                }
+                gc.lastSpawnItemTime = currentTime;
+                Items randomItem = GetRandomItem();
+                SpawnPattern pattern = GetRandomItemPattern();
+                SpawnItems(randomItem, pattern);
+            }
+            if (currentTime - gc.lastSpawnEnemyTime > gc.spawnEnemyCooldown)
+            {
+                gc.lastSpawnEnemyTime = currentTime;
+                Enemies randomEnemy = GetRandomEnemy();
+                SpawnEnemy(randomEnemy);
             }
         }
         /// <summary>
-        /// Chequea si el jugador esta saltando, y si no lo esta inicia el salto
+        /// Devuelve aleatoriamente un Item
         /// </summary>
-        static void Jump()
+        /// <returns>Item</returns>
+        static Items GetRandomItem()
         {
-            if (gameState == GameState.Playing)
+            int chance = random.Next(1, 101);
+            Items item = (chance <= 5) ? Items.Cherry : Items.Gem;
+            return item;
+        }
+        /// <summary>
+        /// Devuelve aleatoriamente un patron de Items
+        /// </summary>
+        /// <returns>patron de items</returns>
+        static SpawnPattern GetRandomItemPattern()
+        {
+            int chance = random.Next(1, 501);
+            if (chance <= 25) return SpawnPattern.square;
+            else if (chance <= 100) return SpawnPattern.row;
+            else if (chance <= 250) return SpawnPattern.line;
+            else if (chance <= 400) return SpawnPattern.doble;
+            else return SpawnPattern.single;
+        }
+        /// <summary>
+        /// Crea items segun el id, posicion y patron
+        /// </summary>
+        /// <param name="id">id del item</param>
+        /// <param name="posX">posicion x</param>
+        /// <param name="posY">posicion y</param>
+        /// <param name="pattern">patron de items</param>
+        static void SpawnItems(Items id, SpawnPattern pattern )
+        {
+            var posX = gc.screenWidth;
+            var posY = gc.groundLevel - 25 * random.Next(2, 4);
+            var cant = random.Next(1, 4);
+            switch(pattern)
             {
-                if (!player.isJumping)
-                {
-                    player.isJumping = true;
-                    player.jumpVelocity = -player.jumpStrength;
-                    SetAnimation($"jump_{player.spriteDirection}");
-                }
-            }                
+                case SpawnPattern.single:
+                    items.Add(new Item(id, posX, posY));
+                    break;
+                case SpawnPattern.doble:
+                    items.Add(new Item(id, posX, posY));
+                    items.Add(new Item(id, posX + 50, posY));
+                    break;
+                case SpawnPattern.row:
+                    for (int i = 0;i< cant;i++)
+                    {
+                        items.Add(new Item(id, posX + i * 50, posY));
+                    }                    
+                    break;
+                case SpawnPattern.line:
+                    for (int i = 0; i < cant; i++)
+                    {
+                        items.Add(new Item(id, posX, posY - i * 25));
+                    }
+                    break;
+                case SpawnPattern.square:
+                    for (int i = 0; i < cant; i++)
+                    {
+                        for (int j = 0; j < cant; j++)
+                        {
+                            items.Add(new Item(id, posX + i * 50, posY - j * 25));
+                        }                           
+                    }
+                    break;
+            }
+       
+        }
+        /// <summary>
+        /// Devuelve un enemigo aleatorio
+        /// </summary>
+        /// <returns></returns>
+        static Enemies GetRandomEnemy()
+        {
+            int chance = random.Next(1, 101);
+            Enemies enemy = (chance <= 30) ? Enemies.Bear : Enemies.Bird;
+            return enemy;
+        }
+        static void SpawnEnemy(Enemies id)
+        {
+            var posX = gc.screenWidth;
+            var posY = gc.groundLevel - 25 * random.Next(2, 4);
+            switch (id)
+            {
+                case Enemies.Bear:
+                    posX = gc.screenWidth + 50;
+                    posY = gc.groundLevel - 65;
+                    enemies.Add(new Enemy(id, posX, posY));
+                    break;
+                case Enemies.Bird:
+                    posX = gc.screenWidth + 50;
+                    posY = 250 + 50 * random.Next(-2, 5);
+                    enemies.Add(new Enemy(id, posX, posY));
+                    break;
+            }
         }
 
         //----------Seccion de funciones Auxiliares----------//
@@ -1104,6 +1216,22 @@ namespace MyGame
             }           
         }
         /// <summary>
+        /// Chequea si se llego al puntaje de victoria
+        /// </summary>
+        static void CheckVictory()
+        {
+            if (gc.score >= gc.scoreToWin)
+            {
+                gc.menuMessage = "Ganaste!";
+                gc.subMessage = "Presiona 'R' para volver al menu";
+                gameState = GameState.Victory;
+                posYFondo = new int[3]
+                {
+                0,gc.screenHeight,gc.screenHeight * 2
+                };
+            }
+        }
+        /// <summary>
         /// Resetea las variables del juego como puntaje y vidas 
         /// </summary>
         static void CheckEnemyAttack(Enemy e)
@@ -1191,6 +1319,8 @@ namespace MyGame
             };
             items.Clear();
             enemies.Clear();
+            sonidos[1].Stop();
+            sonidos[0].PlayLooping();
         }
         /// <summary>
         /// Se encarga de Dañar o Curar al jugador
@@ -1257,6 +1387,32 @@ namespace MyGame
             if (gameState == GameState.Presentation && posYFondo[2] <= 0)
             {
                 IniciarJuego();
+            }
+        }
+        /// <summary>
+        /// Muestra el menu de inicio del juego
+        /// </summary>
+        static void IniciarMenu()
+        {
+            gameState = GameState.Menu;
+            if (gc.soundEnabled)
+            {
+                sonidos[0].PlayLooping();
+            }
+        }
+        /// <summary>
+        /// Inicial el juego y crea al jugador
+        /// </summary>
+        static void IniciarJuego()
+        {
+            posYFondo[2] = 0;
+            sonidos[0].Stop();
+            gc.startTime = DateTime.Now;
+            gameState = GameState.Playing;
+            player = new Character(gc.screenWidth / 2 - 16, 0);
+            if (gc.soundEnabled)
+            {
+                sonidos[1].PlayLooping();
             }
         }
     }

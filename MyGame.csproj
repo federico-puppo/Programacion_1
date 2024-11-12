@@ -68,6 +68,12 @@
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
+    <Content Include="assets\backgrounds\defeat.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="assets\backgrounds\victory.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="assets\character\crouch\1.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
