@@ -38,7 +38,7 @@ namespace MyGame
         static readonly Image[] ui = new Image[7];
         static readonly SoundPlayer[] sonidos = new SoundPlayer[2];
         static readonly Font[] font = new Font[6];
-        static Character player;
+        static Player player;
         static Dictionary<string, Image[]> itemSprites;
         static Dictionary<string, Image[]> enemiesSprites;
         static List<Item> items = new List<Item>();
@@ -233,7 +233,7 @@ namespace MyGame
 
         //----------Clases Principales----------//
 
-        class Character
+        class Player
         {
             public int posX;
             public int posY;
@@ -257,7 +257,7 @@ namespace MyGame
             public Dictionary<string, float> animationSpeed;
             public Dictionary<string, Image[]> sprites;
 
-            public Character(int startX, int startY)
+            public Player(int startX, int startY)
             {
                 posX = startX;
                 posY = startY;
@@ -321,27 +321,10 @@ namespace MyGame
                             Engine.LoadImage("assets/character/jump_L/2.png")
                         }
                     },
-                    {"crouch", new Image[]
-                        {
-                            Engine.LoadImage("assets/character/crouch/1.png"),
-                            Engine.LoadImage("assets/character/crouch/2.png")
-                        }
-                    },
                     {"hurt", new Image[]
                         {
                             Engine.LoadImage("assets/character/hurt/1.png"),
                             Engine.LoadImage("assets/character/hurt/2.png")
-                        }
-                    },
-                     {"hurt2", new Image[]
-                        {
-                            Engine.LoadImage("assets/character/hurt2/1.png"),
-                            Engine.LoadImage("assets/character/hurt2/2.png"),
-                            Engine.LoadImage("assets/character/hurt2/3.png"),
-                            Engine.LoadImage("assets/character/hurt2/4.png"),
-                            Engine.LoadImage("assets/character/hurt2/5.png"),
-                            Engine.LoadImage("assets/character/hurt2/6.png"),
-                            Engine.LoadImage("assets/character/hurt2/7.png")
                         }
                     },
                     {"roll_R", new Image[]
@@ -369,9 +352,7 @@ namespace MyGame
                     {"run_R", 0.06f},
                     {"jump_R", 0.18f},
                     {"jump_L", 0.18f},
-                    {"crouch", 0.1f},
                     {"hurt", 0.2f},
-                    {"hurt2", 0.1f},
                     {"roll_L", 0.04f},
                     {"roll_R", 0.04f}
                 };
@@ -556,6 +537,8 @@ namespace MyGame
                     break;
                 case GameState.Presentation:
                     DrawPresentacion();
+                    break;
+                default:
                     break;
             }
                 Engine.Show();
@@ -1087,8 +1070,7 @@ namespace MyGame
                         }                           
                     }
                     break;
-            }
-       
+            }       
         }
         /// <summary>
         /// Crea un enemigo segun el id
@@ -1164,7 +1146,7 @@ namespace MyGame
         /// <param name="a">jugador</param>
         /// <param name="b">item</param>
         /// <returns>Verdadero si hay collision</returns>
-        static bool CheckCollision(Character a, Item b)
+        static bool CheckCollision(Player a, Item b)
         {
             return a.posX < b.posX + b.width &&
                    a.posX + a.characterWidth > b.posX &&
@@ -1177,7 +1159,7 @@ namespace MyGame
         /// <param name="a">jugador</param>
         /// <param name="b">enemigo</param>
         /// <returns>Verdadero si hay collision</returns>
-        static bool CheckCollision(Character a, Enemy b)
+        static bool CheckCollision(Player a, Enemy b)
         {
             return a.posX < b.posX + b.width &&
                    a.posX + a.characterWidth > b.posX &&
@@ -1403,7 +1385,7 @@ namespace MyGame
             sonidos[0].Stop();
             gc.startTime = DateTime.Now;
             gameState = GameState.Playing;
-            player = new Character(gc.screenWidth / 2 - 16, 0);
+            player = new Player(gc.screenWidth / 2 - 16, 0);
             if (gc.soundEnabled)
             {
                 sonidos[1].PlayLooping();
