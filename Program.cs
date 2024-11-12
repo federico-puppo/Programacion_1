@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Media;
-using System.Runtime.Remoting.Messaging;
-using System.Threading.Tasks;
 using Tao.Sdl;
 
 namespace MyGame
@@ -996,6 +994,7 @@ namespace MyGame
         }
 
         //----------Seccion de funciones del GAMEPLAY----------//
+
         /// <summary>
         /// Se encarga de crear los items y enemigos del juego
         /// </summary>
