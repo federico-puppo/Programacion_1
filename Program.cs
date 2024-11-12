@@ -241,7 +241,7 @@ namespace MyGame
             public int posY;
             public int Maxhp = 125;
             public int currentHp;
-            public int speed = 90;
+            public int speed = 100;
             public bool isJumping = true;
             public bool isTakingDamage = false;
             public bool isMoving = false;
@@ -463,15 +463,15 @@ namespace MyGame
                 {
                     case Enemies.Bear:
                         health = 2;
-                        speed = 125;
+                        speed = 150;
                         damage = 25;
                         width = 40;
                         height = 50;
                         animation = "run";
                         break;
                     case Enemies.Bird:
-                        health = 2;
-                        speed = 190;
+                        health = 3;
+                        speed = 200;
                         damage = 15;
                         width = 38;
                         height = 38;
@@ -499,7 +499,6 @@ namespace MyGame
             if (Engine.KeyPress(Engine.KEY_RIGHT) || Engine.KeyPress(Engine.KEY_D)) Move(1);
             if (Engine.KeyPress(Engine.KEY_LEFT) || Engine.KeyPress(Engine.KEY_A)) Move(-1);
             if (Engine.KeyPress(Engine.KEY_UP) || Engine.KeyPress(Engine.KEY_W) || Engine.KeyPress(Engine.KEY_ESP)) Jump();
-            //if (Engine.KeyPress(Engine.KEY_DOWN) || Engine.KeyPress(Engine.KEY_S)) SetAnimation("crouch");
             if (Engine.KeyPress(Engine.KEY_ESC)) Environment.Exit(0);
             if (Engine.KeyPress(Engine.KEY_1) && (currentTime - gc.lastKeyPressTime > gc.keyCooldown))
             {
@@ -997,6 +996,9 @@ namespace MyGame
         }
 
         //----------Seccion de funciones del GAMEPLAY----------//
+        /// <summary>
+        /// Se encarga de crear los items y enemigos del juego
+        /// </summary>
         static void GameManager()
         {
             if (currentTime - gc.lastSpawnItemTime > gc.spawnItemCooldown && player.posX >= gc.screenWidth - gc.screenMoveLimit && !player.isIdle)
@@ -1037,11 +1039,19 @@ namespace MyGame
             else return SpawnPattern.single;
         }
         /// <summary>
-        /// Crea items segun el id, posicion y patron
+        /// Devuelve un enemigo aleatorio
+        /// </summary>
+        /// <returns></returns>
+        static Enemies GetRandomEnemy()
+        {
+            int chance = random.Next(1, 101);
+            Enemies enemy = (chance <= 30) ? Enemies.Bear : Enemies.Bird;
+            return enemy;
+        }
+        /// <summary>
+        /// Crea items segun el id y patron
         /// </summary>
         /// <param name="id">id del item</param>
-        /// <param name="posX">posicion x</param>
-        /// <param name="posY">posicion y</param>
         /// <param name="pattern">patron de items</param>
         static void SpawnItems(Items id, SpawnPattern pattern )
         {
@@ -1082,15 +1092,9 @@ namespace MyGame
        
         }
         /// <summary>
-        /// Devuelve un enemigo aleatorio
+        /// Crea un enemigo segun el id
         /// </summary>
-        /// <returns></returns>
-        static Enemies GetRandomEnemy()
-        {
-            int chance = random.Next(1, 101);
-            Enemies enemy = (chance <= 30) ? Enemies.Bear : Enemies.Bird;
-            return enemy;
-        }
+        /// <param name="id">Enemigo</param>
         static void SpawnEnemy(Enemies id)
         {
             var posX = gc.screenWidth;
@@ -1104,7 +1108,7 @@ namespace MyGame
                     break;
                 case Enemies.Bird:
                     posX = gc.screenWidth + 50;
-                    posY = 250 + 50 * random.Next(-2, 5);
+                    posY = 250 + 50 * random.Next(-1, 5);
                     enemies.Add(new Enemy(id, posX, posY));
                     break;
             }
@@ -1130,7 +1134,7 @@ namespace MyGame
         /// </summary>
         static void CheckParallax()
         {
-            //Mi parallax consiste de 3 pares de imagenes
+            //Parallax que consiste de 3 pares de imagenes
             for (int i = 1; i < posXParallax.Count / 2 + 1; i++)
             {
                 //FONDO A llega al limite por la izquierda -> fondo A entra por la derecha
@@ -1200,14 +1204,9 @@ namespace MyGame
         {
             if (gc.lifes <= 0)
             {
-                Console.WriteLine("Juego Terminado");
                 gc.menuMessage = "Game Over";
                 gc.subMessage = "Presiona 'R' para volver al menu";
                 gameState = GameState.GameOver;
-                posYFondo = new int[3]
-                {
-                0,gc.screenHeight,gc.screenHeight * 2
-                };
             }
             else
             {
@@ -1225,10 +1224,6 @@ namespace MyGame
                 gc.menuMessage = "Ganaste!";
                 gc.subMessage = "Presiona 'R' para volver al menu";
                 gameState = GameState.Victory;
-                posYFondo = new int[3]
-                {
-                0,gc.screenHeight,gc.screenHeight * 2
-                };
             }
         }
         /// <summary>
@@ -1312,7 +1307,7 @@ namespace MyGame
             gc.menuMessage = "Foxy Runner";
             gc.subMessage = "Presiona 'R' para comenzar";
             gc.score = 0;
-            gc.lifes = 3;
+            gc.lifes = 2;
             posYFondo = new int[3]
             {
                 0,gc.screenHeight,gc.screenHeight * 2
